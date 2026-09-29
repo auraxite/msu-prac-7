@@ -1,0 +1,105 @@
+# =========================
+# C/C++ build artifacts
+# =========================
+*.o
+*.obj
+*.lo
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+
+# Debug / symbols
+*.pdb
+*.ilk
+*.idb
+*.dSYM/
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Dependency files
+*.d
+*.dep
+
+# =========================
+# CMake
+# =========================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+
+# CMake generated dirs
+build/
+build-*/
+cmake-build-*/
+out/
+
+# Ninja
+.ninja_deps
+.ninja_log
+build.ninja
+rules.ninja
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+# If you WANT to commit shared VS Code settings,
+# remove .vscode/ above and use:
+# .vscode/*
+# !.vscode/settings.json
+# !.vscode/tasks.json
+# !.vscode/launch.json
+# !.vscode/extensions.json
+
+# Workspace files
+*.code-workspace
+
+# =========================
+# Visual Studio
+# =========================
+.vs/
+Debug/
+Release/
+x64/
+x86/
+
+# =========================
+# CLion / JetBrains
+# =========================
+.idea/
+cmake-build-debug/
+cmake-build-release/
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =========================
+# Coverage / profiling
+# =========================
+*.gcda
+*.gcno
+*.gcov
+coverage/
+
+1/build/
