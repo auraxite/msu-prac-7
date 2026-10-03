@@ -94,6 +94,32 @@ void Host::night_phase() {
 }
 
 bool Host::check_winner() const {
+    int mafia = 0;
+    int town = 0;
+    bool maniac = false;
+    for (const auto& p : players_) {
+        if (!p->is_alive()) {
+            continue;
+        } else if (p->role() == Role::Mafia) {
+            ++mafia;
+        } else {
+            ++town;
+            if (p->role() == Role::Maniac) {
+                maniac = true;
+            }
+        }
+    }
+
+    if (mafia == 0 && !maniac) {
+        std::cout << "Победили мирные жители\n";
+        return true;
+    } else if (mafia == 0 && town == 2) {
+        std::cout << "Победил маньяк\n";
+        return true;
+    } else if (mafia > town || (mafia == town && !maniac)) {
+        std::cout << "Победила мафия\n";
+        return true;
+    }
     return false;
 }
 
