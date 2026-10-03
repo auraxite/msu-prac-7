@@ -42,7 +42,6 @@ std::optional<NightAction> Civilian::night_action(const GameState&) {
 }
 
 std::optional<NightAction> Mafia::night_action(const GameState& state) {
-    // Не себя и не сообщника
     std::vector<int> candidates;
     for (int id : state.alive_ids) {
         if (id != this->id() && std::ranges::find(allies_, id) == allies_.end()) {
@@ -59,7 +58,6 @@ std::optional<NightAction> Commissar::night_action(const GameState& state) {
 }
 
 std::optional<NightAction> Doctor::night_action(const GameState& state) {
-    // Может лечить и себя
     return NightAction{ActionType::Heal, id(), random_of(state.alive_ids)};
 }
 
