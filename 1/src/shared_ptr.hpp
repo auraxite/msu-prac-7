@@ -153,8 +153,6 @@ void swap(SharedPtr<T>& lhs, SharedPtr<T>& rhs) noexcept {
     lhs.swap(rhs);
 }
 
-// В C++20 из == и <=> компилятор сам выводит !=, <, <=, >, >=
-// и симметричные варианты (nullptr == p).
 template <typename T, typename U>
 bool operator==(const SharedPtr<T>& lhs, const SharedPtr<U>& rhs) noexcept {
     return lhs.get() == rhs.get();

@@ -8,7 +8,6 @@
 
 class Host {
 public:
-    // Id игрока = его индекс в names
     explicit Host(const std::vector<std::string>& names);
 
     const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }

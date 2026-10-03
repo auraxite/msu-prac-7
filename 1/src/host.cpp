@@ -1,13 +1,16 @@
 #include "host.hpp"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <map>
 #include <random>
 #include <stdexcept>
+#include <utility>
 
 namespace {
 
-constexpr int kSpecialRoles = 3;  // комиссар, доктор, маньяк
+constexpr std::array kSpecialRoles = {Role::Commissar, Role::Doctor, Role::Maniac};
 
 SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
     switch (role) {
@@ -52,6 +55,18 @@ void Host::run() {
 }
 
 void Host::day_phase() {
+    GameState state = make_state();
+    std::vector<std::pair<int, int>> votes;
+    for (const auto& p : players_) {
+        if (p->is_alive()) {
+            votes.push_back({p->id(), p->vote(state)});
+        }
+    }
+
+    std::map<int, int> counts;
+    for (auto [voter, target] : votes) {
+        ++counts[target]; 
+    }
 }
 
 void Host::night_phase() {
@@ -64,15 +79,14 @@ bool Host::check_winner() const {
 void Host::assign_roles(const std::vector<std::string>& names) {
     const int n = static_cast<int>(names.size());
     const int mafia_count = std::max(1, n / 3);
-    if (mafia_count + kSpecialRoles > n) {
+    const int special_count = static_cast<int>(kSpecialRoles.size());
+    if (mafia_count + special_count > n) {
         throw std::invalid_argument("too few players");
     }
 
     std::vector<Role> roles(n, Role::Civilian);
     std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-    roles[mafia_count] = Role::Commissar;
-    roles[mafia_count + 1] = Role::Doctor;
-    roles[mafia_count + 2] = Role::Maniac;
+    std::ranges::copy(kSpecialRoles, roles.begin() + mafia_count - 1);
 
     std::mt19937 rng{std::random_device{}()};
     std::ranges::shuffle(roles, rng);
