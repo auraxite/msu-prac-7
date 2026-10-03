@@ -100,6 +100,37 @@ void Host::night_phase() {
 			}
 		}
 	}
+
+	std::map<int, int> mafia_votes;
+	for (const auto& a : actions) {
+		if (a.type == ActionType::MafiaKill) {
+			mafia_votes[a.actor] = a.target;
+		}
+	}
+
+	if (!mafia_votes.empty()) {
+		std::map<int, int> counts;
+		for (auto [voter, target] : mafia_votes) {
+			++counts[target];
+		}
+
+		int best = 0;
+		for (auto [id, c] : counts) {
+			best = std::max(best, c);
+		}
+
+		std::vector<int> leaders;
+		for (auto [id, c] : counts) {
+			if (c == best) {
+				leaders.push_back(id);
+			}
+		}
+
+		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.begin()->second;
+		auto& dead = *players_[victim];
+		dead.kill();
+		std::cout << dead.name() << " погиб\n";
+	}
 }
 
 bool Host::check_winner() const {
