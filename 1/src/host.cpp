@@ -26,6 +26,17 @@ Host::Host(const std::vector<std::string>& names) {
     assign_roles(names);
 }
 
+GameState Host::make_state() const {
+    GameState state;
+    state.round = round_;
+    for (const auto& player : players_) {
+        if (player->is_alive()) {
+            state.alive_ids.push_back(player->id());
+        }
+    }
+    return state;
+}
+
 void Host::assign_roles(const std::vector<std::string>& names) {
     const int n = static_cast<int>(names.size());
     const int mafia_count = std::max(1, n / 3);

@@ -13,8 +13,11 @@ public:
 
     const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 
+    GameState make_state() const;
+
 private:
     void assign_roles(const std::vector<std::string>& names);
 
     std::vector<SharedPtr<Player>> players_;
+    int round_ = 1;
 };

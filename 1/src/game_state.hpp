@@ -2,7 +2,7 @@
 
 #include <vector>
 
-// TODO: заглушка. Что именно видят игроки, решит архитектура ведущего.
 struct GameState {
+    int round = 0;
     std::vector<int> alive_ids;
 };
