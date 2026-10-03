@@ -43,10 +43,12 @@ GameState Host::make_state() const {
 
 void Host::run() {
 	while (true) {
+		std::cout << "\n=== День " << round_ << " ===\n";
 		day_phase();
 		if (check_winner()) {
 			return;
 		}
+		std::cout << "=== Ночь " << round_ << " ===\n";
 		night_phase();
 		if (check_winner()) {
 			return;
@@ -101,6 +103,13 @@ void Host::night_phase() {
 		}
 	}
 
+	int healed = -1;
+	for (const auto& a : actions) {
+		if (a.type == ActionType::Heal) {
+			healed = a.target;
+		}
+	}
+
 	std::map<int, int> mafia_votes;
 	for (const auto& a : actions) {
 		if (a.type == ActionType::MafiaKill) {
@@ -127,9 +136,13 @@ void Host::night_phase() {
 		}
 
 		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.begin()->second;
-		auto& dead = *players_[victim];
-		dead.kill();
-		std::cout << dead.name() << " погиб\n";
+		if (victim == healed) {
+			std::cout << "Этой ночью никто не погиб\n";
+		} else {
+			auto& dead = *players_[victim];
+			dead.kill();
+			std::cout << dead.name() << " погиб\n";
+		}
 	}
 }
 
