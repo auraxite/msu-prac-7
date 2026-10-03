@@ -37,6 +37,30 @@ GameState Host::make_state() const {
     return state;
 }
 
+void Host::run() {
+    while (true) {
+        day_phase();
+        if (check_winner()) {
+            return;
+        }
+        night_phase();
+        if (check_winner()) {
+            return;
+        }
+        ++round_;
+    }
+}
+
+void Host::day_phase() {
+}
+
+void Host::night_phase() {
+}
+
+bool Host::check_winner() const {
+    return false;
+}
+
 void Host::assign_roles(const std::vector<std::string>& names) {
     const int n = static_cast<int>(names.size());
     const int mafia_count = std::max(1, n / 3);
