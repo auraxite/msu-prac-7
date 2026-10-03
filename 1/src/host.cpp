@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iostream>
 #include <iterator>
 #include <map>
 #include <random>
@@ -65,7 +66,27 @@ void Host::day_phase() {
 
     std::map<int, int> counts;
     for (auto [voter, target] : votes) {
-        ++counts[target]; 
+        ++counts[target];
+    }
+
+    int best = 0;
+    for (auto [id, c] : counts) {
+        best = std::max(best, c);
+    }
+
+    std::vector<int> leaders;
+    for (auto [id, c] : counts) {
+        if (c == best) {
+            leaders.push_back(id);
+        }
+    }
+
+    if (leaders.size() == 1) {
+        auto& out = *players_[leaders[0]];
+        out.kill();
+        std::cout << out.name() << " был кикнут (" << role_to_string(out.role()) << ")\n";
+    } else {
+        std::cout << "Ничья\n";
     }
 }
 
@@ -86,7 +107,7 @@ void Host::assign_roles(const std::vector<std::string>& names) {
 
     std::vector<Role> roles(n, Role::Civilian);
     std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-    std::ranges::copy(kSpecialRoles, roles.begin() + mafia_count - 1);
+    std::ranges::copy(kSpecialRoles, roles.begin() + mafia_count);
 
     std::mt19937 rng{std::random_device{}()};
     std::ranges::shuffle(roles, rng);

@@ -1,55 +1,18 @@
-#include <cassert>
 #include <iostream>
-#include <string>
-#include <utility>
 
-#include "shared_ptr.hpp"
-
-namespace {
-
-int g_alive = 0;
-
-struct Base {
-    Base() { ++g_alive; }
-    virtual ~Base() { --g_alive; }
-    virtual std::string name() const { return "Base"; }
-};
-
-struct Derived : Base {
-    std::string name() const override { return "Derived"; }
-};
-
-}  // namespace
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 int main() {
-    {
-        SharedPtr<Base> a(new Derived);
-        assert(a.use_count() == 1 && a->name() == "Derived" && (*a).name() == "Derived");
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
 
-        SharedPtr<Base> b = a;
-        assert(a.use_count() == 2 && a == b);
-
-        SharedPtr<Base> c = std::move(b);
-        assert(!b && b == nullptr && c.use_count() == 2);
-
-        SharedPtr<Derived> d(new Derived);
-        SharedPtr<Base> e = d;
-        assert(e.use_count() == 2 && g_alive == 2);
-
-        swap(a, e);
-        assert(a.get() == d.get());
-        assert((a < c) != (c < a) && a != c);
-
-        c.reset();
-        e.reset();
-        assert(g_alive == 1);
-
-        a = nullptr;
-        a.reset(new Base);
-        assert(g_alive == 2);
-    }
-    assert(g_alive == 0);
-
-    std::cout << "SharedPtr: all checks passed\n";
+    std::cout << "Йоу йоу ту би континьюд\n";
     return 0;
 }
