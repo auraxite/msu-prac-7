@@ -8,20 +8,20 @@
 
 class Host {
 public:
-    explicit Host(const std::vector<std::string>& names);
+	explicit Host(const std::vector<std::string>& names);
 
-    const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
+	const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 
-    GameState make_state() const;
+	GameState make_state() const;
 
-    void run();
+	void run();
 
 private:
-    void assign_roles(const std::vector<std::string>& names);
-    void day_phase();
-    void night_phase();
-    bool check_winner() const;
+	void assign_roles(const std::vector<std::string>& names);
+	void day_phase();
+	void night_phase();
+	bool check_winner() const;
 
-    std::vector<SharedPtr<Player>> players_;
-    int round_ = 1;
+	std::vector<SharedPtr<Player>> players_;
+	int round_ = 1;
 };

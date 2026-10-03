@@ -10,9 +10,9 @@
 
 int main() {
 #ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
+	SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    std::cout << "Йоу йоу ту би континьюд\n";
-    return 0;
+	std::cout << "Йоу йоу ту би континьюд\n";
+	return 0;
 }
