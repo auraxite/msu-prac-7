@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -19,6 +20,17 @@ int random_of(const std::vector<int>& candidates) {
 }
 
 }  // namespace
+
+std::string role_to_string(Role role) {
+    switch (role) {
+        case Role::Civilian:  return "Civilian";
+        case Role::Mafia:     return "Mafia";
+        case Role::Commissar: return "Commissar";
+        case Role::Doctor:    return "Doctor";
+        case Role::Maniac:    return "Maniac";
+    }
+    throw std::logic_error("unknown role");
+}
 
 Player::Player(int id, std::string name, Role role)
     : id_(id), name_(std::move(name)), role_(role) {}

@@ -9,6 +9,8 @@
 
 enum class Role { Civilian, Mafia, Commissar, Doctor, Maniac };
 
+std::string role_to_string(Role role);
+
 enum class ActionType { MafiaKill, Check, Shoot, Heal, ManiacKill };
 
 struct NightAction {
