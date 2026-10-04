@@ -1,4 +1,5 @@
-#include <iostream>
+#include <string>
+#include <vector>
 
 #include "host.hpp"
 
@@ -15,10 +16,12 @@ int main() {
 	SetConsoleOutputCP(CP_UTF8);
 #endif
 
-	Host host({"Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace"});
-	for (const auto& p : host.players()) {
-		std::cout << p->name() << " — " << role_to_string(p->role()) << "\n";
+	std::vector<std::string> names;
+	for (int i = 1; i <= 7; ++i) {
+		names.push_back("Игрок " + std::to_string(i));
 	}
+
+	Host host(names);
 	host.run();
 	return 0;
 }

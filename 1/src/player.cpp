@@ -23,11 +23,11 @@ int random_of(const std::vector<int>& candidates) {
 
 std::string role_to_string(Role role) {
 	switch (role) {
-		case Role::Civilian:  return "Civilian";
-		case Role::Mafia:     return "Mafia";
-		case Role::Commissar: return "Commissar";
-		case Role::Doctor:    return "Doctor";
-		case Role::Maniac:    return "Maniac";
+		case Role::Civilian:  return "Мирный житель";
+		case Role::Mafia:     return "Мафия";
+		case Role::Commissar: return "Комиссар";
+		case Role::Doctor:    return "Доктор";
+		case Role::Maniac:    return "Маньяк";
 	}
 	throw std::logic_error("unknown role");
 }

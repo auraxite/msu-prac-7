@@ -18,6 +18,8 @@ public:
 
 private:
 	void assign_roles(const std::vector<std::string>& names);
+	void announce(const std::string& text) const;
+	void tell(const Player& player, const std::string& text) const;
 	void day_phase();
 	void night_phase();
 	bool check_winner() const;

@@ -41,14 +41,22 @@ GameState Host::make_state() const {
 	return state;
 }
 
+void Host::announce(const std::string& text) const {
+	std::cout << text << "\n";
+}
+
+void Host::tell(const Player& player, const std::string& text) const {
+	std::cout << "[лично → " << player.name() << "] " << text << "\n";
+}
+
 void Host::run() {
 	while (true) {
-		std::cout << "\n=== День " << round_ << " ===\n";
+		announce("\n=== День " + std::to_string(round_) + " ===");
 		day_phase();
 		if (check_winner()) {
 			return;
 		}
-		std::cout << "=== Ночь " << round_ << " ===\n";
+		announce("=== Ночь " + std::to_string(round_) + " ===");
 		night_phase();
 		if (check_winner()) {
 			return;
@@ -86,9 +94,9 @@ void Host::day_phase() {
 	if (leaders.size() == 1) {
 		auto& out = *players_[leaders[0]];
 		out.kill();
-		std::cout << out.name() << " был кикнут (" << role_to_string(out.role()) << ")\n";
+		announce(out.name() + " был кикнут (" + role_to_string(out.role()) + ")");
 	} else {
-		std::cout << "Ничья\n";
+		announce("Ничья");
 	}
 }
 
@@ -107,6 +115,10 @@ void Host::night_phase() {
 	for (const auto& a : actions) {
 		if (a.type == ActionType::Heal) {
 			healed = a.target;
+		} else if (a.type == ActionType::Check) {
+			const auto& suspect = *players_[a.target];
+			const bool is_mafia = suspect.role() == Role::Mafia;
+			tell(*players_[a.actor], suspect.name() + (is_mafia ? " — мафия" : " — не мафия"));
 		}
 	}
 
@@ -116,6 +128,8 @@ void Host::night_phase() {
 			mafia_votes[a.actor] = a.target;
 		}
 	}
+
+	std::vector<int> targets;
 
 	if (!mafia_votes.empty()) {
 		std::map<int, int> counts;
@@ -136,13 +150,27 @@ void Host::night_phase() {
 		}
 
 		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.begin()->second;
-		if (victim == healed) {
-			std::cout << "Этой ночью никто не погиб\n";
-		} else {
-			auto& dead = *players_[victim];
-			dead.kill();
-			std::cout << dead.name() << " погиб\n";
+		targets.push_back(victim);
+	}
+
+	for (const auto& a : actions) {
+		if (a.type == ActionType::ManiacKill) {
+			targets.push_back(a.target);
 		}
+	}
+
+	bool someone_died = false;
+	for (int t : targets) {
+		auto& dead = *players_[t];
+		if (t == healed || !dead.is_alive()) {
+			continue;
+		}
+		dead.kill();
+		announce(dead.name() + " погиб");
+		someone_died = true;
+	}
+	if (!someone_died) {
+		announce("Этой ночью никто не погиб");
 	}
 }
 
@@ -163,14 +191,17 @@ bool Host::check_winner() const {
 		}
 	}
 
-	if (mafia == 0 && !maniac) {
-		std::cout << "Победили мирные жители\n";
+	if (mafia + town == 0) {
+		announce("Все погибли — ничья");
 		return true;
-	} else if (mafia == 0 && town == 2) {
-		std::cout << "Победил маньяк\n";
+	} else if (mafia == 0 && !maniac) {
+		announce("Победили мирные жители");
+		return true;
+	} else if (mafia == 0 && town <= 2) {
+		announce("Победил маньяк");
 		return true;
 	} else if (mafia > town || (mafia == town && !maniac)) {
-		std::cout << "Победила мафия\n";
+		announce("Победила мафия");
 		return true;
 	}
 	return false;
