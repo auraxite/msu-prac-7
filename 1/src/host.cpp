@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -13,6 +14,7 @@
 namespace {
 
 constexpr std::array kSpecialRoles = {Role::Commissar, Role::Doctor, Role::Maniac};
+constexpr int kHumanId = 0;  // Игрок 1
 
 SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
 	switch (role) {
@@ -38,8 +40,48 @@ std::string action_to_string(ActionType type) {
 
 }  // namespace
 
-Host::Host(const std::vector<std::string>& names, bool full_log) : full_log_(full_log) {
+Host::Host(const std::vector<std::string>& names, bool full_log, bool interactive)
+	: full_log_(full_log), interactive_(interactive) {
 	assign_roles(names);
+}
+
+bool Host::is_human(int id) const {
+	return interactive_ && id == kHumanId;
+}
+
+int Host::ask_human_vote(const GameState& state) const {
+	std::vector<int> options;
+	for (int id : state.alive_ids) {
+		if (id != kHumanId) {
+			options.push_back(id);
+		}
+	}
+
+	std::cout << "Ваш голос. Против кого?\n";
+	for (std::size_t i = 0; i < options.size(); ++i) {
+		std::cout << "  " << i + 1 << ") " << players_[options[i]]->name() << "\n";
+	}
+
+	std::string line;
+	while (true) {
+		std::cout << "> " << std::flush;
+		if (!std::getline(std::cin, line)) {
+			std::cout << "\nВвод закончился — голос выбран случайно\n";
+			return players_[kHumanId]->vote(state);
+		}
+
+		const auto first = line.find_first_not_of(" \t\r");
+		const auto last = line.find_last_not_of(" \t\r");
+		const std::string trimmed = first == std::string::npos ? "" : line.substr(first, last - first + 1);
+
+		int choice = 0;
+		const char* end = trimmed.data() + trimmed.size();
+		auto [ptr, ec] = std::from_chars(trimmed.data(), end, choice);
+		if (ec == std::errc{} && ptr == end && choice >= 1 && choice <= static_cast<int>(options.size())) {
+			return options[choice - 1];
+		}
+		std::cout << "Введите число от 1 до " << options.size() << "\n";
+	}
 }
 
 GameState Host::make_state() const {
@@ -104,7 +146,7 @@ void Host::run() {
 			return;
 		}
 		update_boss();
-		announce("=== Ночь " + std::to_string(round_) + " ===");
+		announce("\n=== Ночь " + std::to_string(round_) + " ===");
 		night_phase();
 		if (check_winner()) {
 			return;
@@ -121,9 +163,18 @@ void Host::day_phase() {
 	{
 		std::vector<std::jthread> threads;
 		for (std::size_t i = 0; i < alive.size(); ++i) {
+			if (is_human(alive[i])) {
+				continue;
+			}
 			threads.push_back(std::jthread([&, i] {
 				targets[i] = players_[alive[i]]->vote(state);
 			}));
+		}
+	}
+
+	for (std::size_t i = 0; i < alive.size(); ++i) {
+		if (is_human(alive[i])) {
+			targets[i] = ask_human_vote(state);
 		}
 	}
 
