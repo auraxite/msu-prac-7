@@ -24,9 +24,20 @@ SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
 	throw std::logic_error("unknown role");
 }
 
+std::string action_to_string(ActionType type) {
+	switch (type) {
+		case ActionType::MafiaKill:  return "убийство (мафия)";
+		case ActionType::Check:      return "проверка";
+		case ActionType::Shoot:      return "выстрел";
+		case ActionType::Heal:       return "лечение";
+		case ActionType::ManiacKill: return "убийство (маньяк)";
+	}
+	throw std::logic_error("unknown action");
+}
+
 }  // namespace
 
-Host::Host(const std::vector<std::string>& names) {
+Host::Host(const std::vector<std::string>& names, bool verbose) : verbose_(verbose) {
 	assign_roles(names);
 }
 
@@ -49,7 +60,17 @@ void Host::tell(const Player& player, const std::string& text) const {
 	std::cout << "[лично → " << player.name() << "] " << text << "\n";
 }
 
+void Host::debug(const std::string& text) const {
+	if (verbose_) {
+		std::cout << "[debug] " << text << "\n";
+	}
+}
+
 void Host::run() {
+	for (const auto& p : players_) {
+		debug(p->name() + " — " + role_to_string(p->role()));
+	}
+
 	while (true) {
 		announce("\n=== День " + std::to_string(round_) + " ===");
 		day_phase();
@@ -72,6 +93,10 @@ void Host::day_phase() {
 		if (p->is_alive()) {
 			votes.push_back({p->id(), p->vote(state)});
 		}
+	}
+
+	for (auto [voter, target] : votes) {
+		debug(players_[voter]->name() + " голосует против " + players_[target]->name());
 	}
 
 	std::map<int, int> counts;
@@ -109,6 +134,10 @@ void Host::night_phase() {
 				actions.push_back(*action);
 			}
 		}
+	}
+
+	for (const auto& a : actions) {
+		debug(players_[a.actor]->name() + ": " + action_to_string(a.type) + " → " + players_[a.target]->name());
 	}
 
 	int healed = -1;
@@ -154,7 +183,7 @@ void Host::night_phase() {
 	}
 
 	for (const auto& a : actions) {
-		if (a.type == ActionType::ManiacKill) {
+		if (a.type == ActionType::ManiacKill || a.type == ActionType::Shoot) {
 			targets.push_back(a.target);
 		}
 	}
