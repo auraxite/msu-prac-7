@@ -163,13 +163,22 @@ void Host::day_phase() {
 }
 
 void Host::night_phase() {
+	GameState state = make_state();
+	const std::vector<int>& alive = state.alive_ids;
+	std::vector<std::optional<NightAction>> results(alive.size());
+	{
+		std::vector<std::jthread> threads;
+		for (std::size_t i = 0; i < alive.size(); ++i) {
+			threads.push_back(std::jthread([&, i] {
+				results[i] = players_[alive[i]]->night_action(state);
+			}));
+		}
+	}
+
 	std::vector<NightAction> actions;
-	for (const auto& p : players_) {
-		if (p->is_alive()) {
-			auto action = p->night_action(make_state());
-			if (action) {
-				actions.push_back(*action);
-			}
+	for (const auto& action : results) {
+		if (action) {
+			actions.push_back(*action);
 		}
 	}
 
