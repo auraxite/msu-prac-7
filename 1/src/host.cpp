@@ -13,7 +13,8 @@
 
 namespace {
 
-constexpr std::array kSpecialRoles = {Role::Commissar, Role::Doctor, Role::Maniac};
+constexpr std::array kSpecialRoles = {Role::Commissar, Role::Doctor, Role::Maniac, Role::Hacker, Role::Elder};
+constexpr int kRequiredSpecials = 3;
 constexpr int kHumanId = 0;  // Игрок 1
 
 SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
@@ -23,6 +24,9 @@ SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
 		case Role::Commissar: return SharedPtr<Player>(new Commissar(id, name));
 		case Role::Doctor:    return SharedPtr<Player>(new Doctor(id, name));
 		case Role::Maniac:    return SharedPtr<Player>(new Maniac(id, name));
+		case Role::Ninja:     return SharedPtr<Player>(new Ninja(id, name));
+		case Role::Hacker:    return SharedPtr<Player>(new Hacker(id, name));
+		case Role::Elder:     return SharedPtr<Player>(new Elder(id, name));
 	}
 	throw std::logic_error("unknown role");
 }
@@ -34,6 +38,7 @@ std::string action_to_string(ActionType type) {
 		case ActionType::Shoot:      return "выстрел";
 		case ActionType::Heal:       return "лечение";
 		case ActionType::ManiacKill: return "убийство (маньяк)";
+		case ActionType::Hack:       return "взлом";
 	}
 	throw std::logic_error("unknown action");
 }
@@ -59,7 +64,7 @@ std::string Host::status(const Player& player) const {
 	if (open_announcements_) {
 		return role_to_string(player.role());
 	}
-	return player.role() == Role::Mafia ? "мафия" : "мирный";
+	return is_mafia(player.role()) ? "мафия" : "мирный";
 }
 
 bool Host::is_human(int id) const {
@@ -136,6 +141,8 @@ std::optional<NightAction> Host::ask_human_night_action(const GameState& state) 
 	ActionType type{};
 	switch (me.role()) {
 		case Role::Civilian:
+		case Role::Elder:
+		case Role::Ninja:
 			std::cout << "Вы спите\n";
 			return std::nullopt;
 
@@ -170,6 +177,11 @@ std::optional<NightAction> Host::ask_human_night_action(const GameState& state) 
 		case Role::Maniac:
 			type = ActionType::ManiacKill;
 			target = ask_target("Кого убить?", others);
+			break;
+
+		case Role::Hacker:
+			type = ActionType::Hack;
+			target = ask_target("Кого взломать?", others);
 			break;
 	}
 
@@ -212,7 +224,7 @@ void Host::debug(const std::string& text) const {
 void Host::update_boss() {
 	int boss = -1;
 	for (const auto& p : players_) {
-		if (p->is_alive() && p->role() == Role::Mafia) {
+		if (p->is_alive() && is_mafia(p->role())) {
 			boss = p->id();
 			break;
 		}
@@ -227,7 +239,7 @@ void Host::update_boss() {
 	}
 
 	for (const auto& p : players_) {
-		if (p->is_alive() && p->role() == Role::Mafia) {
+		if (p->is_alive() && is_mafia(p->role())) {
 			tell(*p, "Босс мафии — " + players_[boss_id_]->name());
 		}
 	}
@@ -303,8 +315,12 @@ void Host::day_phase() {
 
 	if (leaders.size() == 1) {
 		auto& out = *players_[leaders[0]];
-		out.kill();
-		announce(out.name() + " был кикнут (" + status(out) + ")");
+		if (out.role() == Role::Elder) {
+			announce(out.name() + " — старейшина, его нельзя казнить");
+		} else {
+			out.kill();
+			announce(out.name() + " был кикнут (" + status(out) + ")");
+		}
 	} else {
 		announce("Ничья");
 	}
@@ -349,8 +365,8 @@ void Host::night_phase() {
 			healed = a.target;
 		} else if (a.type == ActionType::Check) {
 			const auto& suspect = *players_[a.target];
-			const bool is_mafia = suspect.role() == Role::Mafia;
-			tell(*players_[a.actor], suspect.name() + (is_mafia ? " — мафия" : " — не мафия"));
+			const bool looks_mafia = is_mafia(suspect.role()) && suspect.role() != Role::Ninja;
+			tell(*players_[a.actor], suspect.name() + (looks_mafia ? " — мафия" : " — не мафия"));
 		}
 	}
 
@@ -416,6 +432,13 @@ void Host::night_phase() {
 	if (someone_saved && open_announcements_) {
 		announce(players_[healed]->name() + " был спасён доктором");
 	}
+
+	for (const auto& a : actions) {
+		if (a.type == ActionType::Hack) {
+			const auto& victim = *players_[a.target];
+			announce("Взлом хакера: " + victim.name() + (is_mafia(victim.role()) ? " — мафия" : " — не мафия"));
+		}
+	}
 }
 
 bool Host::check_winner() const {
@@ -425,7 +448,7 @@ bool Host::check_winner() const {
 	for (const auto& p : players_) {
 		if (!p->is_alive()) {
 			continue;
-		} else if (p->role() == Role::Mafia) {
+		} else if (is_mafia(p->role())) {
 			++mafia;
 		} else {
 			++town;
@@ -454,14 +477,17 @@ bool Host::check_winner() const {
 void Host::assign_roles(const std::vector<std::string>& names) {
 	const int n = static_cast<int>(names.size());
 	const int mafia_count = std::max(1, n / 3);
-	const int special_count = static_cast<int>(kSpecialRoles.size());
-	if (mafia_count + special_count > n) {
+	const int special_count = std::min(static_cast<int>(kSpecialRoles.size()), n - mafia_count);
+	if (special_count < kRequiredSpecials) {
 		throw std::invalid_argument("too few players");
 	}
 
 	std::vector<Role> roles(n, Role::Civilian);
 	std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-	std::ranges::copy(kSpecialRoles, roles.begin() + mafia_count);
+	if (mafia_count >= 2) {
+		roles[0] = Role::Ninja;
+	}
+	std::copy_n(kSpecialRoles.begin(), special_count, roles.begin() + mafia_count);
 
 	std::mt19937 rng{std::random_device{}()};
 	std::ranges::shuffle(roles, rng);
@@ -471,7 +497,7 @@ void Host::assign_roles(const std::vector<std::string>& names) {
 	std::vector<int> mafia_ids;
 	for (int id = 0; id < n; ++id) {
 		players_.push_back(make_player(roles[id], id, names[id]));
-		if (roles[id] == Role::Mafia) {
+		if (is_mafia(roles[id])) {
 			mafia_ids.push_back(id);
 		}
 	}

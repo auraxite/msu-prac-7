@@ -7,11 +7,12 @@
 
 #include "game_state.hpp"
 
-enum class Role { Civilian, Mafia, Commissar, Doctor, Maniac };
+enum class Role { Civilian, Mafia, Commissar, Doctor, Maniac, Ninja, Hacker, Elder };
 
 std::string role_to_string(Role role);
+bool is_mafia(Role role);
 
-enum class ActionType { MafiaKill, Check, Shoot, Heal, ManiacKill };
+enum class ActionType { MafiaKill, Check, Shoot, Heal, ManiacKill, Hack };
 
 struct NightAction {
 	ActionType type;
@@ -57,7 +58,7 @@ public:
 	std::optional<NightAction> night_action(const GameState& state) override;
 };
 
-class Mafia final : public Player {
+class Mafia : public Player {
 public:
 	Mafia(int id, std::string name) : Player(id, std::move(name), Role::Mafia) {}
 	std::optional<NightAction> night_action(const GameState& state) override;
@@ -66,8 +67,16 @@ public:
 	void set_allies(std::vector<int> ids) { allies_ = std::move(ids); }
 	const std::vector<int>& allies() const noexcept { return allies_; }
 
+protected:
+	Mafia(int id, std::string name, Role role) : Player(id, std::move(name), role) {}
+
 private:
 	std::vector<int> allies_;
+};
+
+class Ninja final : public Mafia {
+public:
+	Ninja(int id, std::string name) : Mafia(id, std::move(name), Role::Ninja) {}
 };
 
 class Commissar final : public Player {
@@ -85,5 +94,17 @@ public:
 class Maniac final : public Player {
 public:
 	Maniac(int id, std::string name) : Player(id, std::move(name), Role::Maniac) {}
+	std::optional<NightAction> night_action(const GameState& state) override;
+};
+
+class Hacker final : public Player {
+public:
+	Hacker(int id, std::string name) : Player(id, std::move(name), Role::Hacker) {}
+	std::optional<NightAction> night_action(const GameState& state) override;
+};
+
+class Elder final : public Player {
+public:
+	Elder(int id, std::string name) : Player(id, std::move(name), Role::Elder) {}
 	std::optional<NightAction> night_action(const GameState& state) override;
 };

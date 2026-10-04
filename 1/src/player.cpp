@@ -28,8 +28,15 @@ std::string role_to_string(Role role) {
 		case Role::Commissar: return "Комиссар";
 		case Role::Doctor:    return "Доктор";
 		case Role::Maniac:    return "Маньяк";
+		case Role::Ninja:     return "Ниндзя";
+		case Role::Hacker:    return "Хакер";
+		case Role::Elder:     return "Старейшина";
 	}
 	throw std::logic_error("unknown role");
+}
+
+bool is_mafia(Role role) {
+	return role == Role::Mafia || role == Role::Ninja;
 }
 
 Player::Player(int id, std::string name, Role role)
@@ -75,4 +82,12 @@ std::optional<NightAction> Doctor::night_action(const GameState& state) {
 
 std::optional<NightAction> Maniac::night_action(const GameState& state) {
 	return NightAction{ActionType::ManiacKill, id(), random_other(state)};
+}
+
+std::optional<NightAction> Hacker::night_action(const GameState& state) {
+	return NightAction{ActionType::Hack, id(), random_other(state)};
+}
+
+std::optional<NightAction> Elder::night_action(const GameState&) {
+	return std::nullopt;
 }
