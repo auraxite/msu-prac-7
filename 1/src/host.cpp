@@ -38,11 +38,28 @@ std::string action_to_string(ActionType type) {
 	throw std::logic_error("unknown action");
 }
 
+std::string killer_to_string(ActionType type) {
+	switch (type) {
+		case ActionType::MafiaKill:  return "мафия";
+		case ActionType::ManiacKill: return "маньяк";
+		case ActionType::Shoot:      return "комиссар";
+		default:                     break;
+	}
+	throw std::logic_error("not a kill action");
+}
+
 }  // namespace
 
-Host::Host(const std::vector<std::string>& names, bool full_log, bool interactive)
-	: full_log_(full_log), interactive_(interactive) {
+Host::Host(const std::vector<std::string>& names, bool full_log, bool interactive, bool open_announcements)
+	: full_log_(full_log), interactive_(interactive), open_announcements_(open_announcements) {
 	assign_roles(names);
+}
+
+std::string Host::status(const Player& player) const {
+	if (open_announcements_) {
+		return role_to_string(player.role());
+	}
+	return player.role() == Role::Mafia ? "мафия" : "мирный";
 }
 
 bool Host::is_human(int id) const {
@@ -287,7 +304,7 @@ void Host::day_phase() {
 	if (leaders.size() == 1) {
 		auto& out = *players_[leaders[0]];
 		out.kill();
-		announce(out.name() + " был кикнут (" + role_to_string(out.role()) + ")");
+		announce(out.name() + " был кикнут (" + status(out) + ")");
 	} else {
 		announce("Ничья");
 	}
@@ -344,7 +361,7 @@ void Host::night_phase() {
 		}
 	}
 
-	std::vector<int> targets;
+	std::vector<std::pair<int, ActionType>> targets;
 
 	if (!mafia_votes.empty()) {
 		std::map<int, int> counts;
@@ -365,27 +382,39 @@ void Host::night_phase() {
 		}
 
 		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.at(boss_id_);
-		targets.push_back(victim);
+		targets.push_back({victim, ActionType::MafiaKill});
 	}
 
 	for (const auto& a : actions) {
 		if (a.type == ActionType::ManiacKill || a.type == ActionType::Shoot) {
-			targets.push_back(a.target);
+			targets.push_back({a.target, a.type});
 		}
 	}
 
 	bool someone_died = false;
-	for (int t : targets) {
+	bool someone_saved = false;
+	for (auto [t, cause] : targets) {
 		auto& dead = *players_[t];
-		if (t == healed || !dead.is_alive()) {
+		if (!dead.is_alive()) {
+			continue;
+		}
+		if (t == healed) {
+			someone_saved = true;
 			continue;
 		}
 		dead.kill();
-		announce(dead.name() + " погиб");
+		std::string text = dead.name() + " погиб (" + status(dead) + ")";
+		if (open_announcements_) {
+			text += ", убийца — " + killer_to_string(cause);
+		}
+		announce(text);
 		someone_died = true;
 	}
 	if (!someone_died) {
 		announce("Этой ночью никто не погиб");
+	}
+	if (someone_saved && open_announcements_) {
+		announce(players_[healed]->name() + " был спасён доктором");
 	}
 }
 

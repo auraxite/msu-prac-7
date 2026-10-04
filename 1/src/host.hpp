@@ -9,7 +9,8 @@
 
 class Host {
 public:
-	explicit Host(const std::vector<std::string>& names, bool full_log = false, bool interactive = false);
+	explicit Host(const std::vector<std::string>& names, bool full_log = false, bool interactive = false,
+	              bool open_announcements = false);
 
 	const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 
@@ -22,6 +23,7 @@ private:
 	void announce(const std::string& text) const;
 	void tell(const Player& player, const std::string& text) const;
 	void debug(const std::string& text) const;
+	std::string status(const Player& player) const;
 	void update_boss();
 	bool is_human(int id) const;
 	std::optional<std::size_t> ask_choice(const std::string& question, const std::vector<std::string>& items) const;
@@ -37,4 +39,5 @@ private:
 	int boss_id_ = -1;
 	bool full_log_ = false;
 	bool interactive_ = false;
+	bool open_announcements_ = false;
 };
