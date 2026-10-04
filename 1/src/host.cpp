@@ -37,7 +37,7 @@ std::string action_to_string(ActionType type) {
 
 }  // namespace
 
-Host::Host(const std::vector<std::string>& names, bool verbose) : verbose_(verbose) {
+Host::Host(const std::vector<std::string>& names, bool full_log) : full_log_(full_log) {
 	assign_roles(names);
 }
 
@@ -61,8 +61,32 @@ void Host::tell(const Player& player, const std::string& text) const {
 }
 
 void Host::debug(const std::string& text) const {
-	if (verbose_) {
+	if (full_log_) {
 		std::cout << "[debug] " << text << "\n";
+	}
+}
+
+void Host::update_boss() {
+	int boss = -1;
+	for (const auto& p : players_) {
+		if (p->is_alive() && p->role() == Role::Mafia) {
+			boss = p->id();
+			break;
+		}
+	}
+
+	if (boss == boss_id_) {
+		return;
+	}
+	boss_id_ = boss;
+	if (boss_id_ == -1) {
+		return;
+	}
+
+	for (const auto& p : players_) {
+		if (p->is_alive() && p->role() == Role::Mafia) {
+			tell(*p, "Босс мафии — " + players_[boss_id_]->name());
+		}
 	}
 }
 
@@ -70,6 +94,7 @@ void Host::run() {
 	for (const auto& p : players_) {
 		debug(p->name() + " — " + role_to_string(p->role()));
 	}
+	update_boss();
 
 	while (true) {
 		announce("\n=== День " + std::to_string(round_) + " ===");
@@ -77,11 +102,13 @@ void Host::run() {
 		if (check_winner()) {
 			return;
 		}
+		update_boss();
 		announce("=== Ночь " + std::to_string(round_) + " ===");
 		night_phase();
 		if (check_winner()) {
 			return;
 		}
+		update_boss();
 		++round_;
 	}
 }
@@ -178,7 +205,7 @@ void Host::night_phase() {
 			}
 		}
 
-		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.begin()->second;
+		int victim = leaders.size() == 1 ? leaders[0] : mafia_votes.at(boss_id_);
 		targets.push_back(victim);
 	}
 

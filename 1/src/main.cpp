@@ -22,7 +22,7 @@ constexpr int kMaxPlayers = 20;
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
-	          << "Использование: mafia [--players N | -n N] [--verbose]\n";
+	          << "Использование: mafia [--players N | -n N] [--full-log]\n";
 	return 1;
 }
 
@@ -34,11 +34,11 @@ int main(int argc, char* argv[]) {
 #endif
 
 	int count = kDefaultPlayers;
-	bool verbose = false;
+	bool full_log = false;
 	for (int i = 1; i < argc; ++i) {
 		std::string_view arg = argv[i];
-		if (arg == "--verbose") {
-			verbose = true;
+		if (arg == "--full-log") {
+			full_log = true;
 		} else if (arg == "--players" || arg == "-n") {
 			if (i + 1 >= argc) {
 				return usage_error("После " + std::string(arg) + " нужно указать число игроков");
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
 		names.push_back("Игрок " + std::to_string(i));
 	}
 
-	Host host(names, verbose);
+	Host host(names, full_log);
 	host.run();
 	return 0;
 }
