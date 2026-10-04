@@ -7,6 +7,7 @@
 #include <map>
 #include <random>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace {
@@ -115,11 +116,20 @@ void Host::run() {
 
 void Host::day_phase() {
 	GameState state = make_state();
-	std::vector<std::pair<int, int>> votes;
-	for (const auto& p : players_) {
-		if (p->is_alive()) {
-			votes.push_back({p->id(), p->vote(state)});
+	const std::vector<int>& alive = state.alive_ids;
+	std::vector<int> targets(alive.size());
+	{
+		std::vector<std::jthread> threads;
+		for (std::size_t i = 0; i < alive.size(); ++i) {
+			threads.push_back(std::jthread([&, i] {
+				targets[i] = players_[alive[i]]->vote(state);
+			}));
 		}
+	}
+
+	std::vector<std::pair<int, int>> votes;
+	for (std::size_t i = 0; i < alive.size(); ++i) {
+		votes.push_back({alive[i], targets[i]});
 	}
 
 	for (auto [voter, target] : votes) {
