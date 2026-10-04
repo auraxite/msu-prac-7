@@ -49,25 +49,18 @@ bool Host::is_human(int id) const {
 	return interactive_ && id == kHumanId;
 }
 
-int Host::ask_human_vote(const GameState& state) const {
-	std::vector<int> options;
-	for (int id : state.alive_ids) {
-		if (id != kHumanId) {
-			options.push_back(id);
-		}
-	}
-
-	std::cout << "Ваш голос. Против кого?\n";
-	for (std::size_t i = 0; i < options.size(); ++i) {
-		std::cout << "  " << i + 1 << ") " << players_[options[i]]->name() << "\n";
+std::optional<std::size_t> Host::ask_choice(const std::string& question, const std::vector<std::string>& items) const {
+	std::cout << question << "\n";
+	for (std::size_t i = 0; i < items.size(); ++i) {
+		std::cout << "  " << i + 1 << ") " << items[i] << "\n";
 	}
 
 	std::string line;
 	while (true) {
 		std::cout << "> " << std::flush;
 		if (!std::getline(std::cin, line)) {
-			std::cout << "\nВвод закончился — голос выбран случайно\n";
-			return players_[kHumanId]->vote(state);
+			std::cout << "\n";
+			return std::nullopt;
 		}
 
 		const auto first = line.find_first_not_of(" \t\r");
@@ -77,11 +70,97 @@ int Host::ask_human_vote(const GameState& state) const {
 		int choice = 0;
 		const char* end = trimmed.data() + trimmed.size();
 		auto [ptr, ec] = std::from_chars(trimmed.data(), end, choice);
-		if (ec == std::errc{} && ptr == end && choice >= 1 && choice <= static_cast<int>(options.size())) {
-			return options[choice - 1];
+		if (ec == std::errc{} && ptr == end && choice >= 1 && choice <= static_cast<int>(items.size())) {
+			return static_cast<std::size_t>(choice - 1);
 		}
-		std::cout << "Введите число от 1 до " << options.size() << "\n";
+		std::cout << "Введите число от 1 до " << items.size() << "\n";
 	}
+}
+
+std::optional<int> Host::ask_target(const std::string& question, const std::vector<int>& ids) const {
+	std::vector<std::string> names;
+	for (int id : ids) {
+		names.push_back(players_[id]->name());
+	}
+	auto choice = ask_choice(question, names);
+	if (!choice) {
+		return std::nullopt;
+	}
+	return ids[*choice];
+}
+
+int Host::ask_human_vote(const GameState& state) const {
+	std::vector<int> options;
+	for (int id : state.alive_ids) {
+		if (id != kHumanId) {
+			options.push_back(id);
+		}
+	}
+
+	auto target = ask_target("Ваш голос. Против кого?", options);
+	if (!target) {
+		std::cout << "Ввод закончился — голос выбран случайно\n";
+		return players_[kHumanId]->vote(state);
+	}
+	return *target;
+}
+
+std::optional<NightAction> Host::ask_human_night_action(const GameState& state) const {
+	const Player& me = *players_[kHumanId];
+
+	std::vector<int> others;
+	for (int id : state.alive_ids) {
+		if (id != kHumanId) {
+			others.push_back(id);
+		}
+	}
+
+	std::optional<int> target;
+	ActionType type{};
+	switch (me.role()) {
+		case Role::Civilian:
+			std::cout << "Вы спите\n";
+			return std::nullopt;
+
+		case Role::Mafia: {
+			const auto& allies = static_cast<const Mafia&>(me).allies();
+			std::vector<int> victims;
+			for (int id : others) {
+				if (std::ranges::find(allies, id) == allies.end()) {
+					victims.push_back(id);
+				}
+			}
+			type = ActionType::MafiaKill;
+			target = ask_target("Кого убить?", victims);
+			break;
+		}
+
+		case Role::Commissar: {
+			auto action = ask_choice("Что делаете?", {"Проверить", "Выстрелить"});
+			if (!action) {
+				break;
+			}
+			type = *action == 0 ? ActionType::Check : ActionType::Shoot;
+			target = ask_target(type == ActionType::Check ? "Кого проверить?" : "В кого выстрелить?", others);
+			break;
+		}
+
+		case Role::Doctor:
+			type = ActionType::Heal;
+			target = ask_target("Кого лечить?", state.alive_ids);
+			break;
+
+		case Role::Maniac:
+			type = ActionType::ManiacKill;
+			target = ask_target("Кого убить?", others);
+			break;
+	}
+
+	if (!target) {
+		std::cout << "Ввод закончился — ход выбран случайно\n";
+		return players_[kHumanId]->night_action(state);
+	}
+	return NightAction{type, kHumanId, *target};
 }
 
 GameState Host::make_state() const {
@@ -221,9 +300,18 @@ void Host::night_phase() {
 	{
 		std::vector<std::jthread> threads;
 		for (std::size_t i = 0; i < alive.size(); ++i) {
+			if (is_human(alive[i])) {
+				continue;
+			}
 			threads.push_back(std::jthread([&, i] {
 				results[i] = players_[alive[i]]->night_action(state);
 			}));
+		}
+	}
+
+	for (std::size_t i = 0; i < alive.size(); ++i) {
+		if (is_human(alive[i])) {
+			results[i] = ask_human_night_action(state);
 		}
 	}
 

@@ -24,7 +24,10 @@ private:
 	void debug(const std::string& text) const;
 	void update_boss();
 	bool is_human(int id) const;
+	std::optional<std::size_t> ask_choice(const std::string& question, const std::vector<std::string>& items) const;
+	std::optional<int> ask_target(const std::string& question, const std::vector<int>& ids) const;
 	int ask_human_vote(const GameState& state) const;
+	std::optional<NightAction> ask_human_night_action(const GameState& state) const;
 	void day_phase();
 	void night_phase();
 	bool check_winner() const;
