@@ -100,7 +100,11 @@ void Host::announce(const std::string& text) const {
 }
 
 void Host::tell(const Player& player, const std::string& text) const {
-	std::cout << "[лично → " << player.name() << "] " << text << "\n";
+	if (is_human(player.id())) {
+		std::cout << "[лично] " << text << "\n";
+	} else {
+		debug("лично → " + player.name() + ": " + text);
+	}
 }
 
 void Host::debug(const std::string& text) const {
@@ -134,9 +138,6 @@ void Host::update_boss() {
 }
 
 void Host::run() {
-	for (const auto& p : players_) {
-		debug(p->name() + " — " + role_to_string(p->role()));
-	}
 	update_boss();
 
 	while (true) {
@@ -363,5 +364,9 @@ void Host::assign_roles(const std::vector<std::string>& names) {
 		std::vector<int> allies;
 		std::ranges::copy_if(mafia_ids, std::back_inserter(allies), [id](int other) { return other != id; });
 		mafia.set_allies(std::move(allies));
+	}
+
+	for (const auto& p : players_) {
+		tell(*p, "Ваша роль: " + role_to_string(p->role()));
 	}
 }
