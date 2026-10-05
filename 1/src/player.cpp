@@ -77,7 +77,13 @@ std::optional<NightAction> Commissar::night_action(const GameState& state) {
 }
 
 std::optional<NightAction> Doctor::night_action(const GameState& state) {
-	return NightAction{ActionType::Heal, id(), random_of(state.alive_ids)};
+	std::vector<int> candidates;
+	for (int id : state.alive_ids) {
+		if (id != last_patient_) {
+			candidates.push_back(id);
+		}
+	}
+	return NightAction{ActionType::Heal, id(), random_of(candidates)};
 }
 
 std::optional<NightAction> Maniac::night_action(const GameState& state) {

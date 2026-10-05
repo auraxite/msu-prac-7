@@ -169,10 +169,18 @@ std::optional<NightAction> Host::ask_human_night_action(const GameState& state) 
 			break;
 		}
 
-		case Role::Doctor:
+		case Role::Doctor: {
+			const int last = static_cast<const Doctor&>(me).last_patient();
+			std::vector<int> patients;
+			for (int id : state.alive_ids) {
+				if (id != last) {
+					patients.push_back(id);
+				}
+			}
 			type = ActionType::Heal;
-			target = ask_target("Кого лечить?", state.alive_ids);
+			target = ask_target("Кого лечить?", patients);
 			break;
+		}
 
 		case Role::Maniac:
 			type = ActionType::ManiacKill;
@@ -363,6 +371,7 @@ void Host::night_phase() {
 	for (const auto& a : actions) {
 		if (a.type == ActionType::Heal) {
 			healed = a.target;
+			static_cast<Doctor&>(*players_[a.actor]).set_last_patient(a.target);
 		} else if (a.type == ActionType::Check) {
 			const auto& suspect = *players_[a.target];
 			const bool looks_mafia = is_mafia(suspect.role()) && suspect.role() != Role::Ninja;

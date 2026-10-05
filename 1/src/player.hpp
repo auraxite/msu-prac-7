@@ -89,6 +89,13 @@ class Doctor final : public Player {
 public:
 	Doctor(int id, std::string name) : Player(id, std::move(name), Role::Doctor) {}
 	std::optional<NightAction> night_action(const GameState& state) override;
+
+	// Одного и того же нельзя лечить две ночи подряд
+	void set_last_patient(int id) noexcept { last_patient_ = id; }
+	int last_patient() const noexcept { return last_patient_; }
+
+private:
+	int last_patient_ = -1;
 };
 
 class Maniac final : public Player {
