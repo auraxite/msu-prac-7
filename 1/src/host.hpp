@@ -1,17 +1,19 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "game_config.hpp"
+#include "logger.hpp"
 #include "player.hpp"
 #include "shared_ptr.hpp"
 
 class Host {
 public:
 	Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log = false,
-	     bool interactive = false, bool open_announcements = false);
+	     bool interactive = false, bool open_announcements = false, bool log = false);
 
 	const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 
@@ -34,7 +36,23 @@ private:
 	std::optional<NightAction> ask_human_night_action(const GameState& state) const;
 	void day_phase();
 	void night_phase();
-	bool check_winner() const;
+	bool check_winner();
+	std::string make_summary() const;
+
+	// Статистика матча для summary.txt
+	struct Fate {
+		int round = 0;    // 0 — жив
+		std::string how;  // "кикнут днём", "убит ночью (мафия)"
+	};
+	struct Stats {
+		std::vector<Fate> fates;  // по id игрока
+		int kicked = 0;
+		int ties = 0;
+		int night_kills = 0;
+		int saved = 0;
+		std::map<ActionType, int> kills_by;
+		std::string result;
+	};
 
 	std::vector<SharedPtr<Player>> players_;
 	int round_ = 1;
@@ -42,4 +60,6 @@ private:
 	bool full_log_ = false;
 	bool interactive_ = false;
 	bool open_announcements_ = false;
+	mutable Logger logger_;  // mutable: пишем из const-методов announce/tell/debug
+	Stats stats_;
 };

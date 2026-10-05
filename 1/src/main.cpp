@@ -25,7 +25,7 @@ constexpr const char* kConfigPath = "config/roles.yaml";
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
-	          << "Использование: mafia [--players N | -n N] [--full-log] [--interactive] [--open-announcements]\n";
+	          << "Использование: mafia [--players N | -n N] [--full-log] [--interactive] [--open-announcements] [--log]\n";
 	return 1;
 }
 
@@ -40,10 +40,13 @@ int main(int argc, char* argv[]) {
 	bool full_log = false;
 	bool interactive = false;
 	bool open_announcements = false;
+	bool log = false;
 	for (int i = 1; i < argc; ++i) {
 		std::string_view arg = argv[i];
 		if (arg == "--full-log") {
 			full_log = true;
+		} else if (arg == "--log") {
+			log = true;
 		} else if (arg == "--interactive") {
 			interactive = true;
 		} else if (arg == "--open-announcements") {
@@ -83,7 +86,7 @@ int main(int argc, char* argv[]) {
 
 	try {
 		std::cout << "\n";
-		Host host(names, config, full_log, interactive, open_announcements);
+		Host host(names, config, full_log, interactive, open_announcements, log);
 		host.run();
 		std::cout << "\n";
 	} catch (const std::invalid_argument& e) {

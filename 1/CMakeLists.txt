@@ -9,7 +9,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Не отключать assert в релизных конфигурациях
 foreach(config RELEASE RELWITHDEBINFO MINSIZEREL)
 	string(REGEX REPLACE "[-/]DNDEBUG" "" CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
 endforeach()

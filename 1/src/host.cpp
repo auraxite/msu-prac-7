@@ -55,8 +55,11 @@ std::string killer_to_string(ActionType type) {
 }  // namespace
 
 Host::Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log, bool interactive,
-           bool open_announcements)
+           bool open_announcements, bool log)
 	: full_log_(full_log), interactive_(interactive), open_announcements_(open_announcements) {
+	if (log) {
+		logger_ = Logger("logs");
+	}
 	assign_roles(names, config);
 }
 
@@ -142,11 +145,11 @@ std::optional<NightAction> Host::ask_human_night_action(const GameState& state) 
 	switch (me.role()) {
 		case Role::Civilian:
 		case Role::Elder:
-		case Role::Ninja:
 			std::cout << "Вы спите\n";
 			return std::nullopt;
 
-		case Role::Mafia: {
+		case Role::Mafia:
+		case Role::Ninja: {
 			const auto& allies = static_cast<const Mafia&>(me).allies();
 			std::vector<int> victims;
 			for (int id : others) {
@@ -213,20 +216,23 @@ GameState Host::make_state() const {
 
 void Host::announce(const std::string& text) const {
 	std::cout << text << "\n";
+	logger_.write(text);
 }
 
 void Host::tell(const Player& player, const std::string& text) const {
 	if (is_human(player.id())) {
 		std::cout << "[лично] " << text << "\n";
-	} else {
-		debug("лично → " + player.name() + ": " + text);
+	} else if (full_log_) {
+		std::cout << "[debug] лично → " << player.name() << ": " << text << "\n";
 	}
+	logger_.write("[лично → " + player.name() + "] " + text);
 }
 
 void Host::debug(const std::string& text) const {
 	if (full_log_) {
 		std::cout << "[debug] " << text << "\n";
 	}
+	logger_.write("[debug] " + text);
 }
 
 void Host::update_boss() {
@@ -273,21 +279,52 @@ void Host::run() {
 	tell_allies();
 
 	while (true) {
+		logger_.start_round(round_);
 		announce("\n=== День " + std::to_string(round_) + " ===");
 		day_phase();
 		if (check_winner()) {
-			return;
+			break;
 		}
 		update_boss();
 		announce("\n=== Ночь " + std::to_string(round_) + " ===");
 		tell_allies();
 		night_phase();
 		if (check_winner()) {
-			return;
+			break;
 		}
 		update_boss();
 		++round_;
 	}
+
+	logger_.write_summary(make_summary());
+}
+
+std::string Host::make_summary() const {
+	std::string s;
+	s += "Итог: " + stats_.result + "\n";
+	s += "Раундов: " + std::to_string(round_) + "\n";
+	s += "Игроков: " + std::to_string(players_.size()) + "\n";
+
+	s += "\nИгроки:\n";
+	for (const auto& p : players_) {
+		const Fate& fate = stats_.fates[p->id()];
+		s += "  " + p->name() + " — " + role_to_string(p->role()) + " — ";
+		s += fate.round == 0 ? "жив" : fate.how + ", раунд " + std::to_string(fate.round);
+		s += "\n";
+	}
+
+	s += "\nСобытия:\n";
+	s += "  Кикнуто днём: " + std::to_string(stats_.kicked) + "\n";
+	s += "  Ничьих в голосовании: " + std::to_string(stats_.ties) + "\n";
+	s += "  Убито ночью: " + std::to_string(stats_.night_kills) + "\n";
+	s += "  Спасено доктором: " + std::to_string(stats_.saved) + "\n";
+
+	s += "\nУбийства по ролям:\n";
+	for (ActionType killer : {ActionType::MafiaKill, ActionType::ManiacKill, ActionType::Shoot}) {
+		const auto it = stats_.kills_by.find(killer);
+		s += "  " + killer_to_string(killer) + ": " + std::to_string(it == stats_.kills_by.end() ? 0 : it->second) + "\n";
+	}
+	return s;
 }
 
 void Host::day_phase() {
@@ -346,9 +383,12 @@ void Host::day_phase() {
 			out.kill();
 			announce(out.name() + " был кикнут (" + status(out) + ")");
 			tell(out, "Вы погибли ☠");
+			++stats_.kicked;
+			stats_.fates[out.id()] = {round_, "кикнут днём"};
 		}
 	} else {
 		announce("Ничья");
+		++stats_.ties;
 	}
 }
 
@@ -453,9 +493,15 @@ void Host::night_phase() {
 		announce(text);
 		tell(dead, "Вы погибли ☠");
 		someone_died = true;
+		++stats_.night_kills;
+		++stats_.kills_by[cause];
+		stats_.fates[t] = {round_, "убит ночью (" + killer_to_string(cause) + ")"};
 	}
 	if (!someone_died) {
 		announce("Этой ночью никто не погиб");
+	}
+	if (someone_saved) {
+		++stats_.saved;
 	}
 	if (someone_saved && open_announcements_) {
 		announce(players_[healed]->name() + " был спасён доктором");
@@ -469,7 +515,7 @@ void Host::night_phase() {
 	}
 }
 
-bool Host::check_winner() const {
+bool Host::check_winner() {
 	int mafia = 0;
 	int town = 0;
 	bool maniac = false;
@@ -487,16 +533,20 @@ bool Host::check_winner() const {
 	}
 
 	if (mafia + town == 0) {
-		announce("Все погибли — ничья");
+		stats_.result = "Все погибли — ничья";
+		announce(stats_.result);
 		return true;
 	} else if (mafia == 0 && !maniac) {
-		announce("Победили мирные жители");
+		stats_.result = "Победили мирные жители";
+		announce(stats_.result);
 		return true;
 	} else if (mafia == 0 && town <= 2) {
-		announce("Победил маньяк");
+		stats_.result = "Победил маньяк";
+		announce(stats_.result);
 		return true;
 	} else if (mafia > town || (mafia == town && !maniac)) {
-		announce("Победила мафия");
+		stats_.result = "Победила мафия";
+		announce(stats_.result);
 		return true;
 	}
 	return false;
@@ -527,6 +577,7 @@ void Host::assign_roles(const std::vector<std::string>& names, const GameConfig&
 
 	players_.clear();
 	players_.reserve(n);
+	stats_.fates.assign(n, Fate{});
 	std::vector<int> mafia_ids;
 	for (int id = 0; id < n; ++id) {
 		players_.push_back(make_player(roles[id], id, names[id]));
