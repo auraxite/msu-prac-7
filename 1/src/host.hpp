@@ -4,13 +4,14 @@
 #include <thread>
 #include <vector>
 
+#include "game_config.hpp"
 #include "player.hpp"
 #include "shared_ptr.hpp"
 
 class Host {
 public:
-	explicit Host(const std::vector<std::string>& names, bool full_log = false, bool interactive = false,
-	              bool open_announcements = false);
+	Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log = false,
+	     bool interactive = false, bool open_announcements = false);
 
 	const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 
@@ -19,7 +20,7 @@ public:
 	void run();
 
 private:
-	void assign_roles(const std::vector<std::string>& names);
+	void assign_roles(const std::vector<std::string>& names, const GameConfig& config);
 	void announce(const std::string& text) const;
 	void tell(const Player& player, const std::string& text) const;
 	void debug(const std::string& text) const;

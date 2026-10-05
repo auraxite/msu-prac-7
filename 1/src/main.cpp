@@ -1,9 +1,11 @@
 #include <charconv>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "game_config.hpp"
 #include "host.hpp"
 
 #ifdef _WIN32
@@ -19,6 +21,7 @@ namespace {
 constexpr int kDefaultPlayers = 7;
 constexpr int kMinPlayers = 5;
 constexpr int kMaxPlayers = 20;
+constexpr const char* kConfigPath = "config/roles.yaml";
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
@@ -65,12 +68,25 @@ int main(int argc, char* argv[]) {
 		                   + std::to_string(kMaxPlayers) + ", получено " + std::to_string(count));
 	}
 
+	GameConfig config;
+	try {
+		config = load_game_config(kConfigPath);
+	} catch (const std::exception& e) {
+		std::cerr << "Ошибка конфигурации: " << e.what() << "\n";
+		return 1;
+	}
+
 	std::vector<std::string> names;
 	for (int i = 1; i <= count; ++i) {
 		names.push_back("Игрок " + std::to_string(i));
 	}
 
-	Host host(names, full_log, interactive, open_announcements);
-	host.run();
+	try {
+		Host host(names, config, full_log, interactive, open_announcements);
+		host.run();
+	} catch (const std::invalid_argument& e) {
+		std::cerr << "Не удалось раздать роли (" << e.what() << "): проверьте " << kConfigPath << " и -n\n";
+		return 1;
+	}
 	return 0;
 }

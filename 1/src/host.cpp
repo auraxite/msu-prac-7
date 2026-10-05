@@ -13,8 +13,7 @@
 
 namespace {
 
-constexpr std::array kSpecialRoles = {Role::Commissar, Role::Doctor, Role::Maniac, Role::Hacker, Role::Elder};
-constexpr int kRequiredSpecials = 3;
+constexpr std::array kRequiredSpecials = {Role::Commissar, Role::Doctor, Role::Maniac};
 constexpr int kHumanId = 0;  // Игрок 1
 
 SharedPtr<Player> make_player(Role role, int id, const std::string& name) {
@@ -55,9 +54,10 @@ std::string killer_to_string(ActionType type) {
 
 }  // namespace
 
-Host::Host(const std::vector<std::string>& names, bool full_log, bool interactive, bool open_announcements)
+Host::Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log, bool interactive,
+           bool open_announcements)
 	: full_log_(full_log), interactive_(interactive), open_announcements_(open_announcements) {
-	assign_roles(names);
+	assign_roles(names, config);
 }
 
 std::string Host::status(const Player& player) const {
@@ -474,20 +474,25 @@ bool Host::check_winner() const {
 	return false;
 }
 
-void Host::assign_roles(const std::vector<std::string>& names) {
+void Host::assign_roles(const std::vector<std::string>& names, const GameConfig& config) {
 	const int n = static_cast<int>(names.size());
-	const int mafia_count = std::max(1, n / 3);
-	const int special_count = std::min(static_cast<int>(kSpecialRoles.size()), n - mafia_count);
-	if (special_count < kRequiredSpecials) {
-		throw std::invalid_argument("too few players");
-	}
+	const int mafia_count = std::max(1, n / config.mafia_divisor);
 
 	std::vector<Role> roles(n, Role::Civilian);
 	std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-	if (mafia_count >= 2) {
+	if (mafia_count >= 2 && config.ninja == 1) {
 		roles[0] = Role::Ninja;
 	}
-	std::copy_n(kSpecialRoles.begin(), special_count, roles.begin() + mafia_count);
+
+	int next = mafia_count;
+	for (auto [role, count] : config.specials) {
+		const int placed = std::min(count, n - next);
+		if (placed < count && std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
+			throw std::invalid_argument("too few players");
+		}
+		std::fill_n(roles.begin() + next, placed, role);
+		next += placed;
+	}
 
 	std::mt19937 rng{std::random_device{}()};
 	std::ranges::shuffle(roles, rng);
