@@ -82,8 +82,10 @@ int main(int argc, char* argv[]) {
 	}
 
 	try {
+		std::cout << "\n";
 		Host host(names, config, full_log, interactive, open_announcements);
 		host.run();
+		std::cout << "\n";
 	} catch (const std::invalid_argument& e) {
 		std::cerr << "Не удалось раздать роли (" << e.what() << "): проверьте " << kConfigPath << " и -n\n";
 		return 1;

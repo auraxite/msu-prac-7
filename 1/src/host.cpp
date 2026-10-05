@@ -253,8 +253,24 @@ void Host::update_boss() {
 	}
 }
 
+void Host::tell_allies() const {
+	for (const auto& p : players_) {
+		if (!p->is_alive() || !is_mafia(p->role())) {
+			continue;
+		}
+		std::string names;
+		for (int id : static_cast<const Mafia&>(*p).allies()) {
+			if (players_[id]->is_alive()) {
+				names += (names.empty() ? "" : ", ") + players_[id]->name();
+			}
+		}
+		tell(*p, names.empty() ? "Живых сообщников нет" : "Ваши сообщники: " + names);
+	}
+}
+
 void Host::run() {
 	update_boss();
+	tell_allies();
 
 	while (true) {
 		announce("\n=== День " + std::to_string(round_) + " ===");
@@ -264,6 +280,7 @@ void Host::run() {
 		}
 		update_boss();
 		announce("\n=== Ночь " + std::to_string(round_) + " ===");
+		tell_allies();
 		night_phase();
 		if (check_winner()) {
 			return;
@@ -328,6 +345,7 @@ void Host::day_phase() {
 		} else {
 			out.kill();
 			announce(out.name() + " был кикнут (" + status(out) + ")");
+			tell(out, "Вы погибли ☠");
 		}
 	} else {
 		announce("Ничья");
@@ -433,6 +451,7 @@ void Host::night_phase() {
 			text += ", убийца — " + killer_to_string(cause);
 		}
 		announce(text);
+		tell(dead, "Вы погибли ☠");
 		someone_died = true;
 	}
 	if (!someone_died) {

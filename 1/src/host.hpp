@@ -26,6 +26,7 @@ private:
 	void debug(const std::string& text) const;
 	std::string status(const Player& player) const;
 	void update_boss();
+	void tell_allies() const;
 	bool is_human(int id) const;
 	std::optional<std::size_t> ask_choice(const std::string& question, const std::vector<std::string>& items) const;
 	std::optional<int> ask_target(const std::string& question, const std::vector<int>& ids) const;
