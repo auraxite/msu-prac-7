@@ -25,7 +25,6 @@ public:
 	Player(int id, std::string name, Role role);
 	virtual ~Player() = default;
 
-	// Полиморфный базовый класс: копирование привело бы к срезке
 	Player(const Player&) = delete;
 	Player& operator=(const Player&) = delete;
 
@@ -35,14 +34,11 @@ public:
 	bool is_alive() const noexcept { return alive_; }
 	void kill() noexcept { alive_ = false; }
 
-	// std::nullopt — ночью игрок ничего не делает
 	virtual std::optional<NightAction> night_action(const GameState& state) = 0;
 
-	// Id того, против кого голос. Воздержаться и голосовать за себя нельзя.
 	int vote(const GameState& state) const;
 
 protected:
-	// Случайный живой игрок, кроме себя
 	int random_other(const GameState& state) const;
 
 private:
@@ -63,7 +59,6 @@ public:
 	Mafia(int id, std::string name) : Player(id, std::move(name), Role::Mafia) {}
 	std::optional<NightAction> night_action(const GameState& state) override;
 
-	// Id сообщников. Знает только сам мафиози, в GameState не попадает.
 	void set_allies(std::vector<int> ids) { allies_ = std::move(ids); }
 	const std::vector<int>& allies() const noexcept { return allies_; }
 

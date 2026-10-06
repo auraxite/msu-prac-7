@@ -1,5 +1,6 @@
 #include <charconv>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -23,7 +24,7 @@ constexpr const char* kConfigPath = "config/roles.yaml";
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
-	          << "Параметры запуска: [--full-log] [--interactive] [--log] [--open-announcements] [--players N | -n N]\n";
+	          << "Параметры запуска: [--full-log] [--interactive] [--log] [--open-announcements] [--players N | -n N] [--seed S]\n";
 	return 1;
 }
 
@@ -47,6 +48,7 @@ int main(int argc, char* argv[]) {
 	bool interactive = false;
 	bool open_announcements = false;
 	bool log = false;
+	std::optional<unsigned> seed;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if (arg == "--full-log") {
@@ -67,6 +69,18 @@ int main(int argc, char* argv[]) {
 			if (ec != std::errc{} || ptr != end) {
 				return usage_error("Число игроков должно быть целым числом: " + std::string(value));
 			}
+		} else if (arg == "--seed") {
+			if (i + 1 >= argc) {
+				return usage_error("После --seed нужно указать число");
+			}
+			std::string value = argv[++i];
+			const char* end = value.data() + value.size();
+			unsigned parsed = 0;
+			auto [ptr, ec] = std::from_chars(value.data(), end, parsed);
+			if (ec != std::errc{} || ptr != end) {
+				return usage_error("Seed должен быть неотрицательным целым числом: " + value);
+			}
+			seed = parsed;
 		} else {
 			return usage_error("Неизвестный аргумент: " + std::string(arg));
 		}
@@ -84,7 +98,7 @@ int main(int argc, char* argv[]) {
 
 	try {
 		std::cout << "\n";
-		Host host(names, config, full_log, interactive, log, open_announcements);
+		Host host(names, config, full_log, interactive, log, open_announcements, seed);
 		host.run();
 		std::cout << "\n";
 	} catch (const std::invalid_argument& e) {

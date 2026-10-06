@@ -20,10 +20,8 @@ std::string trim(const std::string& s) {
 	return s.substr(first, last - first + 1);
 }
 
-constexpr Role kRequired[] = {Role::Commissar, Role::Doctor, Role::Maniac};
-
 bool is_required(Role role) {
-	return std::ranges::find(kRequired, role) != std::end(kRequired);
+	return std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end();
 }
 
 std::optional<Role> special_from_name(const std::string& name) {
@@ -130,7 +128,7 @@ GameConfig load_game_config(const std::string& path) {
 	if (!seen.contains("specials")) {
 		return config;
 	}
-	for (Role role : kRequired) {
+	for (Role role : kRequiredSpecials) {
 		if (std::ranges::find(specials, role) == specials.end()) {
 			throw std::runtime_error(path + ": нет обязательной роли «" + role_to_string(role) + "»");
 		}
