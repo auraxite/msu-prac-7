@@ -55,7 +55,7 @@ std::string killer_to_string(ActionType type) {
 }  // namespace
 
 Host::Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log, bool interactive,
-           bool open_announcements, bool log)
+           bool log, bool open_announcements)
 	: full_log_(full_log), interactive_(interactive), open_announcements_(open_announcements) {
 	if (log) {
 		logger_ = Logger("logs");
@@ -558,18 +558,16 @@ void Host::assign_roles(const std::vector<std::string>& names, const GameConfig&
 
 	std::vector<Role> roles(n, Role::Civilian);
 	std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-	if (mafia_count >= 2 && config.ninja == 1) {
-		roles[0] = Role::Ninja;
-	}
 
 	int next = mafia_count;
-	for (auto [role, count] : config.specials) {
-		const int placed = std::min(count, n - next);
-		if (placed < count && std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
+	for (Role role : config.specials) {
+		if (role == Role::Ninja) {
+			roles[0] = Role::Ninja;
+		} else if (next < n) {
+			roles[next++] = role;
+		} else if (std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
 			throw std::invalid_argument("too few players");
 		}
-		std::fill_n(roles.begin() + next, placed, role);
-		next += placed;
 	}
 
 	std::mt19937 rng{std::random_device{}()};

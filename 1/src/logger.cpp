@@ -3,21 +3,21 @@
 #include <algorithm>
 #include <charconv>
 #include <iostream>
-#include <string_view>
+#include <string>
 #include <system_error>
 
 namespace fs = std::filesystem;
 
 namespace {
 
-constexpr std::string_view kMatchPrefix = "match_";
+const std::string kMatchPrefix = "match_";
 
-std::string numbered(std::string_view prefix, int number) {
+std::string numbered(const std::string& prefix, int number) {
 	std::string digits = std::to_string(number);
 	if (digits.size() < 3) {
 		digits.insert(0, 3 - digits.size(), '0');
 	}
-	return std::string(prefix) + digits;
+	return prefix + digits;
 }
 
 int match_number(const fs::directory_entry& entry) {

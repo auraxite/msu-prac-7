@@ -13,7 +13,7 @@
 class Host {
 public:
 	Host(const std::vector<std::string>& names, const GameConfig& config, bool full_log = false,
-	     bool interactive = false, bool open_announcements = false, bool log = false);
+	     bool interactive = false, bool log = false, bool open_announcements = false);
 
 	const std::vector<SharedPtr<Player>>& players() const noexcept { return players_; }
 

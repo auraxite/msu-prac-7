@@ -6,18 +6,18 @@
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <stdexcept>
-#include <string_view>
 
 namespace {
 
-std::string trim(std::string_view s) {
+std::string trim(const std::string& s) {
 	const auto first = s.find_first_not_of(" \t\r");
-	if (first == std::string_view::npos) {
+	if (first == std::string::npos) {
 		return "";
 	}
 	const auto last = s.find_last_not_of(" \t\r");
-	return std::string(s.substr(first, last - first + 1));
+	return s.substr(first, last - first + 1);
 }
 
 constexpr Role kRequired[] = {Role::Commissar, Role::Doctor, Role::Maniac};
@@ -26,41 +26,22 @@ bool is_required(Role role) {
 	return std::ranges::find(kRequired, role) != std::end(kRequired);
 }
 
-std::optional<Role> special_from_name(std::string_view name) {
+std::optional<Role> special_from_name(const std::string& name) {
 	if (name == "commissar") return Role::Commissar;
 	if (name == "doctor")    return Role::Doctor;
 	if (name == "maniac")    return Role::Maniac;
+	if (name == "ninja")     return Role::Ninja;
 	if (name == "hacker")    return Role::Hacker;
 	if (name == "elder")     return Role::Elder;
 	return std::nullopt;
 }
 
-class ConfigError {
-public:
-	ConfigError(const std::string& path, int line) : prefix_(path + ", строка " + std::to_string(line) + ": ") {}
-
-	[[noreturn]] void operator()(const std::string& message) const {
-		throw std::runtime_error(prefix_ + message);
-	}
-
-private:
-	std::string prefix_;
-};
-
-int parse_int(const std::string& value, const ConfigError& fail) {
+int parse_int(const std::string& value, const auto& fail) {
 	int result = 0;
 	const char* end = value.data() + value.size();
 	auto [ptr, ec] = std::from_chars(value.data(), end, result);
 	if (ec != std::errc{} || ptr != end) {
 		fail("ожидалось целое число, а не '" + value + "'");
-	}
-	return result;
-}
-
-int parse_flag(const std::string& key, const std::string& value, const ConfigError& fail) {
-	const int result = parse_int(value, fail);
-	if (result != 0 && result != 1) {
-		fail(key + ": допустимо только 0 или 1");
 	}
 	return result;
 }
@@ -72,66 +53,56 @@ GameConfig load_game_config(const std::string& path) {
 
 	std::ifstream file(path);
 	if (!file) {
-		std::cerr << "Нет " << path << " — используются значения по умолчанию\n";
+		std::cerr << "Нет " << path << " - используются значения по умолчанию\n";
 		return config;
 	}
 
-	bool seen_divisor = false;
-	bool seen_ninja = false;
-	bool seen_specials = false;
+	std::set<std::string> seen;
 	bool in_specials = false;
-	std::vector<std::pair<Role, int>> specials;
+	std::vector<Role> specials;
 
 	std::string raw;
 	int number = 0;
+	auto fail = [&](const std::string& message) {
+		throw std::runtime_error(path + ", строка " + std::to_string(number) + ": " + message);
+	};
+
 	while (std::getline(file, raw)) {
 		++number;
-		if (number == 1 && raw.starts_with("\xEF\xBB\xBF")) {
-			raw.erase(0, 3);
-		}
-		const ConfigError fail(path, number);
 
 		const std::string text = raw.substr(0, raw.find('#'));
 		if (trim(text).empty()) {
 			continue;
 		}
-		if (text[0] == '\t') {
-			fail("табы в отступах запрещены");
-		}
-		const bool indented = text[0] == ' ';
+		const bool indented = text[0] == ' ' || text[0] == '\t';
 
 		const auto colon = text.find(':');
 		if (colon == std::string::npos) {
 			fail("ожидалось 'ключ: значение'");
 		}
-		const std::string key = trim(std::string_view(text).substr(0, colon));
-		const std::string value = trim(std::string_view(text).substr(colon + 1));
+		const std::string key = trim(text.substr(0, colon));
+		const std::string value = trim(text.substr(colon + 1));
+
+		if (!seen.insert(key).second) {
+			fail("'" + key + "' повторяется");
+		}
 
 		if (!indented) {
 			in_specials = false;
-			if (key == "mafia_divisor") {
-				if (seen_divisor) {
-					fail("mafia_divisor повторяется");
+			if (key == "default_players") {
+				config.default_players = parse_int(value, fail);
+				if (config.default_players < 5 || config.default_players > 20) {
+					fail("default_players должен быть от 5 до 20");
 				}
-				seen_divisor = true;
+			} else if (key == "mafia_divisor") {
 				config.mafia_divisor = parse_int(value, fail);
 				if (config.mafia_divisor < 3) {
 					fail("mafia_divisor должен быть не меньше 3");
 				}
-			} else if (key == "ninja") {
-				if (seen_ninja) {
-					fail("ninja повторяется");
-				}
-				seen_ninja = true;
-				config.ninja = parse_flag(key, value, fail);
 			} else if (key == "specials") {
-				if (seen_specials) {
-					fail("specials повторяется");
-				}
 				if (!value.empty()) {
 					fail("после 'specials:' роли перечисляются на следующих строках с отступом");
 				}
-				seen_specials = true;
 				in_specials = true;
 			} else {
 				fail("неизвестный ключ '" + key + "'");
@@ -142,30 +113,28 @@ GameConfig load_game_config(const std::string& path) {
 			}
 			const auto role = special_from_name(key);
 			if (!role) {
-				fail("неизвестная роль '" + key + "' (есть: commissar, doctor, maniac, hacker, elder)");
+				fail("неизвестная роль: '" + key + "'");
 			}
-			if (std::ranges::find(specials, *role, &std::pair<Role, int>::first) != specials.end()) {
-				fail("роль '" + key + "' повторяется");
+			const int count = parse_int(value, fail);
+			if (count != 0 && count != 1) {
+				fail(key + ": допустимо только 0 или 1");
 			}
-			const int count = parse_flag(key, value, fail);
-			if (count == 0 && is_required(*role)) {
-				fail(key + " — обязательная роль, должно быть 1");
+			if (count == 1) {
+				specials.push_back(*role);
+			} else if (is_required(*role)) {
+				fail(key + " - обязательная роль, должно быть 1");
 			}
-			specials.push_back({*role, count});
 		}
 	}
 
-	if (seen_specials) {
-		// Не указанные обязательные роли добавляются в начало списка,
-		// чтобы им гарантированно хватило мест
-		std::vector<std::pair<Role, int>> missing;
-		for (Role role : kRequired) {
-			if (std::ranges::find(specials, role, &std::pair<Role, int>::first) == specials.end()) {
-				missing.push_back({role, 1});
-			}
-		}
-		specials.insert(specials.begin(), missing.begin(), missing.end());
-		config.specials = std::move(specials);
+	if (!seen.contains("specials")) {
+		return config;
 	}
+	for (Role role : kRequired) {
+		if (std::ranges::find(specials, role) == specials.end()) {
+			throw std::runtime_error(path + ": нет обязательной роли «" + role_to_string(role) + "»");
+		}
+	}
+	config.specials = std::move(specials);
 	return config;
 }

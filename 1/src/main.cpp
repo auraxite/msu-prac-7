@@ -2,7 +2,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "game_config.hpp"
@@ -18,14 +17,13 @@
 
 namespace {
 
-constexpr int kDefaultPlayers = 7;
 constexpr int kMinPlayers = 5;
 constexpr int kMaxPlayers = 20;
 constexpr const char* kConfigPath = "config/roles.yaml";
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
-	          << "Использование: mafia [--players N | -n N] [--full-log] [--interactive] [--open-announcements] [--log]\n";
+	          << "Параметры запуска: [--full-log] [--interactive] [--log] [--open-announcements] [--players N | -n N]\n";
 	return 1;
 }
 
@@ -36,13 +34,21 @@ int main(int argc, char* argv[]) {
 	SetConsoleOutputCP(CP_UTF8);
 #endif
 
-	int count = kDefaultPlayers;
+	GameConfig config;
+	try {
+		config = load_game_config(kConfigPath);
+	} catch (const std::exception& e) {
+		std::cerr << "Ошибка конфигурации: " << e.what() << "\n";
+		return 1;
+	}
+
+	int count = config.default_players;
 	bool full_log = false;
 	bool interactive = false;
 	bool open_announcements = false;
 	bool log = false;
 	for (int i = 1; i < argc; ++i) {
-		std::string_view arg = argv[i];
+		std::string arg = argv[i];
 		if (arg == "--full-log") {
 			full_log = true;
 		} else if (arg == "--log") {
@@ -55,7 +61,7 @@ int main(int argc, char* argv[]) {
 			if (i + 1 >= argc) {
 				return usage_error("После " + std::string(arg) + " нужно указать число игроков");
 			}
-			std::string_view value = argv[++i];
+			std::string value = argv[++i];
 			const char* end = value.data() + value.size();
 			auto [ptr, ec] = std::from_chars(value.data(), end, count);
 			if (ec != std::errc{} || ptr != end) {
@@ -71,14 +77,6 @@ int main(int argc, char* argv[]) {
 		                   + std::to_string(kMaxPlayers) + ", получено " + std::to_string(count));
 	}
 
-	GameConfig config;
-	try {
-		config = load_game_config(kConfigPath);
-	} catch (const std::exception& e) {
-		std::cerr << "Ошибка конфигурации: " << e.what() << "\n";
-		return 1;
-	}
-
 	std::vector<std::string> names;
 	for (int i = 1; i <= count; ++i) {
 		names.push_back("Игрок " + std::to_string(i));
@@ -86,7 +84,7 @@ int main(int argc, char* argv[]) {
 
 	try {
 		std::cout << "\n";
-		Host host(names, config, full_log, interactive, open_announcements, log);
+		Host host(names, config, full_log, interactive, log, open_announcements);
 		host.run();
 		std::cout << "\n";
 	} catch (const std::invalid_argument& e) {
