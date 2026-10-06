@@ -6,8 +6,6 @@
 #include <string>
 #include <system_error>
 
-namespace fs = std::filesystem;
-
 namespace {
 
 const std::string kMatchPrefix = "match_";
@@ -20,7 +18,7 @@ std::string numbered(const std::string& prefix, int number) {
 	return prefix + digits;
 }
 
-int match_number(const fs::directory_entry& entry) {
+int match_number(const std::filesystem::directory_entry& entry) {
 	if (!entry.is_directory()) {
 		return 0;
 	}
@@ -37,27 +35,27 @@ int match_number(const fs::directory_entry& entry) {
 
 }  // namespace
 
-Logger::Logger(const fs::path& root) {
+Logger::Logger(const std::filesystem::path& root) {
 	std::error_code ec;
-	fs::create_directories(root, ec);
+	std::filesystem::create_directories(root, ec);
 	if (ec) {
-		std::cerr << "Не удалось создать папку " << root.string() << " (" << ec.message() << ") — игра без лога\n";
+		std::cerr << "Не удалось создать папку " << root.string() << " (" << ec.message() << ")\n";
 		return;
 	}
 
 	int last = 0;
-	for (const auto& entry : fs::directory_iterator(root, ec)) {
+	for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
 		last = std::max(last, match_number(entry));
 	}
 	if (ec) {
-		std::cerr << "Не удалось прочитать папку " << root.string() << " (" << ec.message() << ") — игра без лога\n";
+		std::cerr << "Не удалось прочитать папку " << root.string() << "\n";
 		return;
 	}
 
-	const fs::path dir = root / numbered(kMatchPrefix, last + 1);
-	fs::create_directory(dir, ec);
+	const std::filesystem::path dir = root / numbered(kMatchPrefix, last + 1);
+	std::filesystem::create_directory(dir, ec);
 	if (ec) {
-		std::cerr << "Не удалось создать папку " << dir.string() << " (" << ec.message() << ") — игра без лога\n";
+		std::cerr << "Не удалось создать папку " << dir.string() << "\n";
 		return;
 	}
 
@@ -71,7 +69,7 @@ void Logger::start_round(int round) {
 		return;
 	}
 	round_.close();
-	const fs::path file = dir_ / (numbered("round_", round) + ".txt");
+	const std::filesystem::path file = dir_ / (numbered("round_", round) + ".txt");
 	round_.open(file);
 	if (!round_) {
 		std::cerr << "Не удалось создать " << file.string() << " — раунд не будет записан\n";
@@ -89,7 +87,7 @@ void Logger::write_summary(const std::string& text) {
 		return;
 	}
 	round_.close();
-	const fs::path file = dir_ / "summary.txt";
+	const std::filesystem::path file = dir_ / "summary.txt";
 	std::ofstream summary(file);
 	if (!summary) {
 		std::cerr << "Не удалось создать " << file.string() << "\n";

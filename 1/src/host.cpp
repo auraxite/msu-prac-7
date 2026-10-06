@@ -81,127 +81,6 @@ Host::Host(const std::vector<std::string>& names, const GameConfig& config, bool
 	assign_roles(names, config, seed);
 }
 
-std::string Host::status(const Player& player) const {
-	if (open_announcements_) {
-		return role_to_string(player.role());
-	}
-	return is_mafia(player.role()) ? "мафия" : "мирный";
-}
-
-bool Host::is_human(int id) const {
-	return interactive_ && id == kHumanId;
-}
-
-std::optional<std::size_t> Host::ask_choice(const std::string& question, const std::vector<std::string>& items) const {
-	std::cout << question << "\n";
-	for (std::size_t i = 0; i < items.size(); ++i) {
-		std::cout << "  " << i + 1 << ") " << items[i] << "\n";
-	}
-
-	std::string line;
-	while (true) {
-		std::cout << "> " << std::flush;
-		if (!std::getline(std::cin, line)) {
-			std::cout << "\n";
-			return std::nullopt;
-		}
-
-		const auto first = line.find_first_not_of(" \t\r");
-		const auto last = line.find_last_not_of(" \t\r");
-		const std::string trimmed = first == std::string::npos ? "" : line.substr(first, last - first + 1);
-
-		int choice = 0;
-		const char* end = trimmed.data() + trimmed.size();
-		auto [ptr, ec] = std::from_chars(trimmed.data(), end, choice);
-		if (ec == std::errc{} && ptr == end && choice >= 1 && choice <= static_cast<int>(items.size())) {
-			return static_cast<std::size_t>(choice - 1);
-		}
-		std::cout << "Введите число от 1 до " << items.size() << "\n";
-	}
-}
-
-std::optional<int> Host::ask_target(const std::string& question, const std::vector<int>& ids) const {
-	std::vector<std::string> names;
-	for (int id : ids) {
-		names.push_back(players_[id]->name());
-	}
-	auto choice = ask_choice(question, names);
-	if (!choice) {
-		return std::nullopt;
-	}
-	return ids[*choice];
-}
-
-int Host::ask_human_vote(const GameState& state) const {
-	auto target = ask_target("Ваш голос. Против кого?", without(state.alive_ids, kHumanId));
-	if (!target) {
-		std::cout << "Ввод закончился — голос выбран случайно\n";
-		return players_[kHumanId]->vote(state);
-	}
-	return *target;
-}
-
-std::optional<NightAction> Host::ask_human_night_action(const GameState& state) const {
-	const Player& me = *players_[kHumanId];
-	const std::vector<int> others = without(state.alive_ids, kHumanId);
-
-	std::optional<int> target;
-	ActionType type{};
-	switch (me.role()) {
-		case Role::Civilian:
-		case Role::Elder:
-			std::cout << "Вы спите\n";
-			return std::nullopt;
-
-		case Role::Mafia:
-		case Role::Ninja: {
-			const auto& allies = static_cast<const Mafia&>(me).allies();
-			std::vector<int> victims;
-			for (int id : others) {
-				if (std::ranges::find(allies, id) == allies.end()) {
-					victims.push_back(id);
-				}
-			}
-			type = ActionType::MafiaKill;
-			target = ask_target("Кого убить?", victims);
-			break;
-		}
-
-		case Role::Commissar: {
-			auto action = ask_choice("Что делаете?", {"Проверить", "Выстрелить"});
-			if (!action) {
-				break;
-			}
-			type = *action == 0 ? ActionType::Check : ActionType::Shoot;
-			target = ask_target(type == ActionType::Check ? "Кого проверить?" : "В кого выстрелить?", others);
-			break;
-		}
-
-		case Role::Doctor: {
-			const int last = static_cast<const Doctor&>(me).last_patient();
-			type = ActionType::Heal;
-			target = ask_target("Кого лечить?", without(state.alive_ids, last));
-			break;
-		}
-
-		case Role::Maniac:
-			type = ActionType::ManiacKill;
-			target = ask_target("Кого убить?", others);
-			break;
-
-		case Role::Hacker:
-			type = ActionType::Hack;
-			target = ask_target("Кого взломать?", others);
-			break;
-	}
-
-	if (!target) {
-		std::cout << "Ввод закончился — ход выбран случайно\n";
-		return players_[kHumanId]->night_action(state);
-	}
-	return NightAction{type, kHumanId, *target};
-}
-
 GameState Host::make_state() const {
 	GameState state;
 	state.round = round_;
@@ -213,26 +92,74 @@ GameState Host::make_state() const {
 	return state;
 }
 
-void Host::announce(const std::string& text) const {
-	std::cout << text << "\n";
-	logger_.write(text);
+void Host::run() {
+	update_boss();
+	tell_allies();
+
+	while (true) {
+		logger_.start_round(round_);
+		announce("\n=== День " + std::to_string(round_) + " ===");
+		day_phase();
+		if (check_winner()) {
+			break;
+		}
+		update_boss();
+		announce("\n=== Ночь " + std::to_string(round_) + " ===");
+		tell_allies();
+		night_phase();
+		if (check_winner()) {
+			break;
+		}
+		update_boss();
+		++round_;
+	}
+
+	logger_.write_summary(make_summary());
 }
 
-void Host::tell(const Player& player, const std::string& text) const {
-	const std::string private_message = "[лично → " + player.name() + "] " + text;
-	if (is_human(player.id())) {
-		std::cout << "[лично] " << text << "\n";
-	} else if (full_log_) {
-		std::cout << private_message << "\n";
-	}
-	logger_.write(private_message);
-}
+void Host::assign_roles(const std::vector<std::string>& names, const GameConfig& config,
+                        std::optional<unsigned> seed) {
+	const int n = static_cast<int>(names.size());
+	const int mafia_count = std::max(1, n / config.mafia_divisor);
 
-void Host::debug(const std::string& text) const {
-	if (full_log_) {
-		std::cout << "[debug] " << text << "\n";
+	std::vector<Role> roles(n, Role::Civilian);
+	std::fill_n(roles.begin(), mafia_count, Role::Mafia);
+
+	int next = mafia_count;
+	for (Role role : config.specials) {
+		if (role == Role::Ninja) {
+			roles[0] = Role::Ninja;
+		} else if (next < n) {
+			roles[next++] = role;
+		} else if (std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
+			throw std::invalid_argument("too few players");
+		}
 	}
-	logger_.write("[debug] " + text);
+
+	std::mt19937 rng{seed.value_or(std::random_device{}())};
+	std::ranges::shuffle(roles, rng);
+
+	players_.clear();
+	players_.reserve(n);
+	fates_.assign(n, "жив");
+	std::vector<int> mafia_ids;
+	for (int id = 0; id < n; ++id) {
+		players_.push_back(make_player(roles[id], id, names[id]));
+		if (is_mafia(roles[id])) {
+			mafia_ids.push_back(id);
+		}
+	}
+
+	for (int id : mafia_ids) {
+		auto& mafia = static_cast<Mafia&>(*players_[id]);
+		std::vector<int> allies;
+		std::ranges::copy_if(mafia_ids, std::back_inserter(allies), [id](int other) { return other != id; });
+		mafia.set_allies(std::move(allies));
+	}
+
+	for (const auto& p : players_) {
+		tell(*p, "Ваша роль: " + role_to_string(p->role()));
+	}
 }
 
 void Host::update_boss() {
@@ -267,39 +194,6 @@ void Host::tell_allies() const {
 		}
 		tell(*p, names.empty() ? "Живых сообщников нет" : "Ваши сообщники: " + names);
 	}
-}
-
-void Host::run() {
-	update_boss();
-	tell_allies();
-
-	while (true) {
-		logger_.start_round(round_);
-		announce("\n=== День " + std::to_string(round_) + " ===");
-		day_phase();
-		if (check_winner()) {
-			break;
-		}
-		update_boss();
-		announce("\n=== Ночь " + std::to_string(round_) + " ===");
-		tell_allies();
-		night_phase();
-		if (check_winner()) {
-			break;
-		}
-		update_boss();
-		++round_;
-	}
-
-	logger_.write_summary(make_summary());
-}
-
-std::string Host::make_summary() const {
-	std::string s = "Итог: " + result_ + "\nРаундов: " + std::to_string(round_) + "\n\nИгроки:\n";
-	for (const auto& p : players_) {
-		s += "  " + p->name() + " - " + role_to_string(p->role()) + " - " + fates_[p->id()] + "\n";
-	}
-	return s;
 }
 
 void Host::day_phase() {
@@ -484,47 +378,153 @@ bool Host::check_winner() {
 	return true;
 }
 
-void Host::assign_roles(const std::vector<std::string>& names, const GameConfig& config,
-                        std::optional<unsigned> seed) {
-	const int n = static_cast<int>(names.size());
-	const int mafia_count = std::max(1, n / config.mafia_divisor);
-
-	std::vector<Role> roles(n, Role::Civilian);
-	std::fill_n(roles.begin(), mafia_count, Role::Mafia);
-
-	int next = mafia_count;
-	for (Role role : config.specials) {
-		if (role == Role::Ninja) {
-			roles[0] = Role::Ninja;
-		} else if (next < n) {
-			roles[next++] = role;
-		} else if (std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
-			throw std::invalid_argument("too few players");
-		}
-	}
-
-	std::mt19937 rng{seed.value_or(std::random_device{}())};
-	std::ranges::shuffle(roles, rng);
-
-	players_.clear();
-	players_.reserve(n);
-	fates_.assign(n, "жив");
-	std::vector<int> mafia_ids;
-	for (int id = 0; id < n; ++id) {
-		players_.push_back(make_player(roles[id], id, names[id]));
-		if (is_mafia(roles[id])) {
-			mafia_ids.push_back(id);
-		}
-	}
-
-	for (int id : mafia_ids) {
-		auto& mafia = static_cast<Mafia&>(*players_[id]);
-		std::vector<int> allies;
-		std::ranges::copy_if(mafia_ids, std::back_inserter(allies), [id](int other) { return other != id; });
-		mafia.set_allies(std::move(allies));
-	}
-
+std::string Host::make_summary() const {
+	std::string s = "Итог: " + result_ + "\nРаундов: " + std::to_string(round_) + "\n\nИгроки:\n";
 	for (const auto& p : players_) {
-		tell(*p, "Ваша роль: " + role_to_string(p->role()));
+		s += "  " + p->name() + " - " + role_to_string(p->role()) + " - " + fates_[p->id()] + "\n";
 	}
+	return s;
+}
+
+bool Host::is_human(int id) const {
+	return interactive_ && id == kHumanId;
+}
+
+std::optional<std::size_t> Host::ask_choice(const std::string& question, const std::vector<std::string>& items) const {
+	std::cout << question << "\n";
+	for (std::size_t i = 0; i < items.size(); ++i) {
+		std::cout << "  " << i + 1 << ") " << items[i] << "\n";
+	}
+
+	std::string line;
+	while (true) {
+		std::cout << "> " << std::flush;
+		if (!std::getline(std::cin, line)) {
+			std::cout << "\n";
+			return std::nullopt;
+		}
+
+		const auto first = line.find_first_not_of(" \t\r");
+		const auto last = line.find_last_not_of(" \t\r");
+		const std::string trimmed = first == std::string::npos ? "" : line.substr(first, last - first + 1);
+
+		int choice = 0;
+		const char* end = trimmed.data() + trimmed.size();
+		auto [ptr, ec] = std::from_chars(trimmed.data(), end, choice);
+		if (ec == std::errc{} && ptr == end && choice >= 1 && choice <= static_cast<int>(items.size())) {
+			return static_cast<std::size_t>(choice - 1);
+		}
+		std::cout << "Введите число от 1 до " << items.size() << "\n";
+	}
+}
+
+std::optional<int> Host::ask_target(const std::string& question, const std::vector<int>& ids) const {
+	std::vector<std::string> names;
+	for (int id : ids) {
+		names.push_back(players_[id]->name());
+	}
+	auto choice = ask_choice(question, names);
+	if (!choice) {
+		return std::nullopt;
+	}
+	return ids[*choice];
+}
+
+int Host::ask_human_vote(const GameState& state) const {
+	auto target = ask_target("Ваш голос. Против кого?", without(state.alive_ids, kHumanId));
+	if (!target) {
+		std::cout << "Ввод закончился — голос выбран случайно\n";
+		return players_[kHumanId]->vote(state);
+	}
+	return *target;
+}
+
+std::optional<NightAction> Host::ask_human_night_action(const GameState& state) const {
+	const Player& me = *players_[kHumanId];
+	const std::vector<int> others = without(state.alive_ids, kHumanId);
+
+	std::optional<int> target;
+	ActionType type{};
+	switch (me.role()) {
+		case Role::Civilian:
+		case Role::Elder:
+			std::cout << "Вы спите\n";
+			return std::nullopt;
+
+		case Role::Mafia:
+		case Role::Ninja: {
+			const auto& allies = static_cast<const Mafia&>(me).allies();
+			std::vector<int> victims;
+			for (int id : others) {
+				if (std::ranges::find(allies, id) == allies.end()) {
+					victims.push_back(id);
+				}
+			}
+			type = ActionType::MafiaKill;
+			target = ask_target("Кого убить?", victims);
+			break;
+		}
+
+		case Role::Commissar: {
+			auto action = ask_choice("Что делаете?", {"Проверить", "Выстрелить"});
+			if (!action) {
+				break;
+			}
+			type = *action == 0 ? ActionType::Check : ActionType::Shoot;
+			target = ask_target(type == ActionType::Check ? "Кого проверить?" : "В кого выстрелить?", others);
+			break;
+		}
+
+		case Role::Doctor: {
+			const int last = static_cast<const Doctor&>(me).last_patient();
+			type = ActionType::Heal;
+			target = ask_target("Кого лечить?", without(state.alive_ids, last));
+			break;
+		}
+
+		case Role::Maniac:
+			type = ActionType::ManiacKill;
+			target = ask_target("Кого убить?", others);
+			break;
+
+		case Role::Hacker:
+			type = ActionType::Hack;
+			target = ask_target("Кого взломать?", others);
+			break;
+	}
+
+	if (!target) {
+		std::cout << "Ввод закончился — ход выбран случайно\n";
+		return players_[kHumanId]->night_action(state);
+	}
+	return NightAction{type, kHumanId, *target};
+}
+
+void Host::announce(const std::string& text) const {
+	std::cout << text << "\n";
+	logger_.write(text);
+}
+
+void Host::tell(const Player& player, const std::string& text) const {
+	const std::string private_message = "[лично → " + player.name() + "] " + text;
+	if (is_human(player.id())) {
+		std::cout << "[лично] " << text << "\n";
+	} else if (full_log_) {
+		std::cout << private_message << "\n";
+	}
+	logger_.write(private_message);
+}
+
+void Host::debug(const std::string& text) const {
+	if (full_log_) {
+		std::cout << "[debug] " << text << "\n";
+	}
+	logger_.write("[debug] " + text);
+}
+
+std::string Host::status(const Player& player) const {
+	if (open_announcements_) {
+		return role_to_string(player.role());
+	}
+	return is_mafia(player.role()) ? "мафия" : "мирный";
 }
