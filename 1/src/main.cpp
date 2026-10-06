@@ -24,7 +24,7 @@ constexpr const char* kConfigPath = "config/roles.yaml";
 
 int usage_error(const std::string& message) {
 	std::cerr << message << "\n"
-	          << "Параметры запуска: [--full-log] [--interactive] [--log] [--open-announcements] [--players N | -n N] [--seed S]\n";
+	          << "Параметры запуска: [--log-console] [--interactive] [--log-file] [--open-announcements] [--players N | -n N] [--seed S]\n";
 	return 1;
 }
 
@@ -51,9 +51,9 @@ int main(int argc, char* argv[]) {
 	std::optional<unsigned> seed;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
-		if (arg == "--full-log") {
+		if (arg == "--log-console") {
 			full_log = true;
-		} else if (arg == "--log") {
+		} else if (arg == "--log-file") {
 			log = true;
 		} else if (arg == "--interactive") {
 			interactive = true;

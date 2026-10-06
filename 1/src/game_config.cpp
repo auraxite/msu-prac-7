@@ -67,6 +67,9 @@ GameConfig load_game_config(const std::string& path) {
 
 	while (std::getline(file, raw)) {
 		++number;
+		if (number == 1 && raw.starts_with("\xEF\xBB\xBF")) {
+			raw.erase(0, 3);
+		}
 
 		const std::string text = raw.substr(0, raw.find('#'));
 		if (trim(text).empty()) {

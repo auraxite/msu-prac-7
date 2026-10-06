@@ -128,7 +128,9 @@ void Host::assign_roles(const std::vector<std::string>& names, const GameConfig&
 	int next = mafia_count;
 	for (Role role : config.specials) {
 		if (role == Role::Ninja) {
-			roles[0] = Role::Ninja;
+			if (mafia_count >= 2) {
+				roles[0] = Role::Ninja;
+			}
 		} else if (next < n) {
 			roles[next++] = role;
 		} else if (std::ranges::find(kRequiredSpecials, role) != kRequiredSpecials.end()) {
